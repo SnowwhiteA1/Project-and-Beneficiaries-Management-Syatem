@@ -16,7 +16,7 @@ import {
 // Import your components
 import Login from "./components/Login/Login";
 import Dashboard from "./components/Dashboard/Dashboard";
-import Participants from "./components/Participents/Participants";
+import Participants from "./components/Participants/Participants";
 import Projects from "./components/Projects/Projects";
 import Funders from "./components/Funders/Funders";
 
@@ -36,6 +36,7 @@ function App() {
         >
           <Toolbar>
             <Typography variant="h6" noWrap component="div">
+                
               JumpStart Your Career Management System
             </Typography>
           </Toolbar>
