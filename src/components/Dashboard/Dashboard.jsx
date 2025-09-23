@@ -1,41 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
-  Box, Typography, Card, CardContent, CardActions, Button, Grid, Toolbar, IconButton, Menu, MenuItem, Modal, TextField 
+  Box, Typography, Card, CardContent, CardActions, Button, Grid, Toolbar, IconButton, Menu, MenuItem, Modal, TextField, FormControl, InputLabel, Select, OutlinedInput, Checkbox, ListItemText 
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import axios from "axios";
 
-// Sample data (replace with backend data later)
-const initialProjects = [
-  {
-    id: 1,
-    title: "Expanded Public Works Programme",
-    startDate: "10-07-2025",
-    endDate: "31-03-2026",
-    description: "Cleaning and beautification of Mbombela Stadium and Maintanance of its entry routes",
-    participants: 72,
-  },
-  {
-    id: 2,
-    title: "BankSeta Internship",
-    startDate: "02-05-2025",
-    endDate: "30-04-2026",
-    description: "3 years internship",
-    participants: 27,
-  },
-  {
-    id: 3,
-    title: "TETA Graduate",
-    startDate: "06-01-2025",
-    endDate: "31-12-2025",
-    description: "Unemployed Internship Graduate",
-    participants: 10,
-  },
-];
+// List of fixed accreditors
+const ACCREDITORS = ["Accreditor A", "Accreditor B", "Accreditor C", "Accreditor D"];
 
 const Dashboard = () => {
-  const [projects, setProjects] = useState(initialProjects);
+  const [projects, setProjects] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [openModal, setOpenModal] = useState(false);
@@ -43,10 +19,24 @@ const Dashboard = () => {
   const [newProject, setNewProject] = useState({
     title: "",
     description: "",
-    startDate: "",
-    endDate: "",
+    start_date: "",
+    end_date: "",
     participants: "",
+    accreditors: [],
   });
+
+  // Fetch projects from backend
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await axios.get("http://localhost:5000/projects");
+        setProjects(response.data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   // Menu for card actions
   const handleMenuClick = (event, project) => {
@@ -59,8 +49,13 @@ const Dashboard = () => {
     setSelectedProject(null);
   };
 
-  const handleDeleteProject = () => {
-    setProjects(projects.filter((p) => p.id !== selectedProject.id));
+  const handleDeleteProject = async () => {
+    try {
+      await axios.delete(`http://localhost:5000/projects/${selectedProject.id}`);
+      setProjects(projects.filter((p) => p.id !== selectedProject.id));
+    } catch (err) {
+      console.error(err);
+    }
     handleMenuClose();
   };
 
@@ -73,20 +68,37 @@ const Dashboard = () => {
     setNewProject({ ...newProject, [e.target.name]: e.target.value });
   };
 
-  const handleAddProjectSubmit = () => {
-    const id = projects.length ? projects[projects.length - 1].id + 1 : 1;
-    setProjects([...projects, { ...newProject, id }]);
-    setNewProject({ title: "", description: "", startDate: "", endDate: "", participants: "" });
-    setAddModalOpen(false);
+  const handleAddProjectSubmit = async () => {
+    try {
+      const response = await axios.post("http://localhost:5000/projects", newProject);
+      setProjects([response.data, ...projects]);
+      setNewProject({
+        title: "",
+        description: "",
+        start_date: "",
+        end_date: "",
+        participants: "",
+        accreditors: [],
+      });
+      setAddModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAccreditorsChange = (event) => {
+    const {
+      target: { value },
+    } = event;
+    setNewProject({ ...newProject, accreditors: typeof value === 'string' ? value.split(',') : value });
   };
 
   return (
     <Box sx={{ padding: 3 }}>
       <Toolbar />
 
-      {/* Header with logo and titles */}
+      {/* Header Titles */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "left", mb: 3 }}>
-       
         <Box sx={{ textAlign: "right" }}>
           <Typography variant="h5" sx={{ fontWeight: "bold", color: "#1976d2" }}>
              Projects and Beneficiaries Management System
@@ -97,7 +109,7 @@ const Dashboard = () => {
         </Box>
       </Box>
 
-      {/* Projects Overview */}
+      {/* Projects Overview Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold", color: "#1976d2" }}>
           Projects Overview
@@ -146,9 +158,10 @@ const Dashboard = () => {
                   {project.description}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Start:</strong> {project.startDate} <br />
-                  <strong>End:</strong> {project.endDate} <br />
-                  <strong>Participants:</strong> {project.participants}
+                  <strong>Start:</strong> {project.start_date} <br />
+                  <strong>End:</strong> {project.end_date} <br />
+                  <strong>Participants:</strong> {project.participants} <br />
+                  <strong>Accreditors:</strong> {project.accreditors ? project.accreditors.join(", ") : "-"}
                 </Typography>
               </CardContent>
               <CardActions>
@@ -164,7 +177,6 @@ const Dashboard = () => {
       {/* Card Action Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
         <MenuItem onClick={handleDeleteProject}>Delete</MenuItem>
-        {/* Add edit functionality here later */}
       </Menu>
 
       {/* Project Details Modal */}
@@ -179,9 +191,10 @@ const Dashboard = () => {
                 {selectedProject.description}
               </Typography>
               <Typography variant="body2">
-                <strong>Start:</strong> {selectedProject.startDate} <br />
-                <strong>End:</strong> {selectedProject.endDate} <br />
-                <strong>Participants:</strong> {selectedProject.participants}
+                <strong>Start:</strong> {selectedProject.start_date} <br />
+                <strong>End:</strong> {selectedProject.end_date} <br />
+                <strong>Participants:</strong> {selectedProject.participants} <br />
+                <strong>Accreditors:</strong> {selectedProject.accreditors ? selectedProject.accreditors.join(", ") : "-"}
               </Typography>
               <Button onClick={() => setOpenModal(false)} sx={{ mt: 2 }} variant="contained">Close</Button>
             </>
@@ -195,9 +208,29 @@ const Dashboard = () => {
           <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>Add New Project</Typography>
           <TextField label="Title" name="title" fullWidth sx={{ mb: 2 }} value={newProject.title} onChange={handleAddProjectChange} />
           <TextField label="Description" name="description" fullWidth sx={{ mb: 2 }} value={newProject.description} onChange={handleAddProjectChange} />
-          <TextField label="Start Date" name="startDate" type="date" fullWidth sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} value={newProject.startDate} onChange={handleAddProjectChange} />
-          <TextField label="End Date" name="endDate" type="date" fullWidth sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} value={newProject.endDate} onChange={handleAddProjectChange} />
+          <TextField label="Start Date" name="start_date" type="date" fullWidth sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} value={newProject.start_date} onChange={handleAddProjectChange} />
+          <TextField label="End Date" name="end_date" type="date" fullWidth sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} value={newProject.end_date} onChange={handleAddProjectChange} />
           <TextField label="Participants" name="participants" type="number" fullWidth sx={{ mb: 2 }} value={newProject.participants} onChange={handleAddProjectChange} />
+
+          {/* Accreditors Multi-Select */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Accreditors</InputLabel>
+            <Select
+              multiple
+              value={newProject.accreditors}
+              onChange={handleAccreditorsChange}
+              input={<OutlinedInput label="Accreditors" />}
+              renderValue={(selected) => selected.join(", ")}
+            >
+              {ACCREDITORS.map((acc) => (
+                <MenuItem key={acc} value={acc}>
+                  <Checkbox checked={newProject.accreditors.indexOf(acc) > -1} />
+                  <ListItemText primary={acc} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           <Button variant="contained" onClick={handleAddProjectSubmit}>Add Project</Button>
         </Box>
       </Modal>
