@@ -12,14 +12,14 @@ app.use(bodyParser.json());
 
 // PostgreSQL pool
 const pool = new Pool({
-  user: 'postgres',          // your postgres username
+  user: 'postgres',
   host: 'localhost',
-  database: ' JumpStart_Project_and_Beneficiary_Management_System', // your database name
+  database: 'jumpstart_project_and_beneficiary_management_system',
   password: 'admin123', // replace with your postgres password
   port: 5000,
 });
 
-// Test endpoint
+// Test route
 app.get('/', (req, res) => {
   res.send('Backend is running');
 });
@@ -28,28 +28,27 @@ app.get('/', (req, res) => {
 app.get('/projects', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM projects ORDER BY id DESC');
+    console.log('Database query result:', result.rows); // debug line
     res.json(result.rows);
   } catch (err) {
-    console.error("Error fetching projects:", err.message);
-    res.status(500).send('Server Error');
+    console.error('Error querying database:', err.message);
+    res.status(500).json({ error: 'Server error querying database' });
   }
 });
 
-// Add a new project
+
+// Add new project
 app.post('/projects', async (req, res) => {
   try {
     const { title, description, start_date, end_date, participants, accreditors } = req.body;
-
     const result = await pool.query(
-      `INSERT INTO projects (title, description, start_date, end_date, participants, accreditors) 
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      'INSERT INTO projects (title, description, start_date, end_date, participants, accreditors) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
       [title, description, start_date, end_date, participants, accreditors]
     );
-
-    res.json({ success: true, project: result.rows[0] });
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("Error adding project:", err.message);
-    res.status(500).json({ success: false, message: "Could not add project" });
+    console.error('Error inserting project:', err.message);
+    res.status(500).send('Server Error');
   }
 });
 
