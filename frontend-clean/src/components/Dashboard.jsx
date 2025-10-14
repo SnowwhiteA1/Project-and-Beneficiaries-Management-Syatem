@@ -14,8 +14,12 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  IconButton,
+  Menu,
+  MenuItem
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import axios from "axios";
 
 const companyLogo = "/logo192.png";
@@ -25,6 +29,7 @@ const Dashboard = () => {
   const [projects, setProjects] = useState([]);
   const [totalBeneficiaries, setTotalBeneficiaries] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Form fields
   const [projectName, setProjectName] = useState("");
@@ -32,6 +37,11 @@ const Dashboard = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [participants, setParticipants] = useState("");
+  const [editProjectId, setEditProjectId] = useState(null);
+
+  // Three dots menu state
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   const API_URL = "http://127.0.0.1:5050/projects";
 
@@ -54,39 +64,93 @@ const Dashboard = () => {
     }
   };
 
-  // Open and close dialog
-  const handleOpen = () => setOpenDialog(true);
+  const handleOpen = () => {
+    setIsEditMode(false);
+    setProjectName("");
+    setDescription("");
+    setStartDate("");
+    setEndDate("");
+    setParticipants("");
+    setOpenDialog(true);
+  };
   const handleClose = () => setOpenDialog(false);
 
-  const handleAddProject = async () => {
+  // Add or Edit Project
+  const handleAddOrEditProject = async () => {
     if (!projectName || !description || !startDate || !endDate || !participants) {
       alert("Please fill all fields");
       return;
     }
 
     try {
-      await axios.post(API_URL, {
-        project_name: projectName,
-        description,
-        start_date: startDate,
-        end_date: endDate,
-        participants: parseInt(participants),
-      });
+      if (isEditMode) {
+        // Edit existing project
+        await axios.put(`${API_URL}/${editProjectId}`, {
+          project_name: projectName,
+          description,
+          start_date: startDate,
+          end_date: endDate,
+          participants: parseInt(participants),
+        });
+      } else {
+        // Add new project
+        await axios.post(API_URL, {
+          project_name: projectName,
+          description,
+          start_date: startDate,
+          end_date: endDate,
+          participants: parseInt(participants),
+        });
+      }
 
-      // Clear form
+      // Clear form and refresh
       setProjectName("");
       setDescription("");
       setStartDate("");
       setEndDate("");
       setParticipants("");
-
-      // Close dialog and refresh projects
+      setEditProjectId(null);
+      setIsEditMode(false);
       handleClose();
       fetchProjects();
     } catch (err) {
-      console.error("Error adding project:", err);
-      alert("Failed to add project. Check backend connection.");
+      console.error("Error saving project:", err);
+      alert("Failed to save project. Check backend connection.");
     }
+  };
+
+  // Three dots menu functions
+  const handleMenuClick = (event, project) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedProject(project);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedProject(null);
+  };
+
+  const handleEditProject = () => {
+    setIsEditMode(true);
+    setEditProjectId(selectedProject.id);
+    setProjectName(selectedProject.project_name);
+    setDescription(selectedProject.description);
+    setStartDate(selectedProject.start_date);
+    setEndDate(selectedProject.end_date);
+    setParticipants(selectedProject.participants || "");
+    handleOpen();
+    handleMenuClose();
+  };
+
+  const handleDeleteProject = async () => {
+    try {
+      await axios.delete(`${API_URL}/${selectedProject.id}`);
+      fetchProjects();
+    } catch (err) {
+      console.error("Error deleting project:", err);
+      alert("Failed to delete project.");
+    }
+    handleMenuClose();
   };
 
   return (
@@ -107,18 +171,18 @@ const Dashboard = () => {
         <Box sx={{ display: "flex", gap: 5 }}>
           <Box>
             <Typography variant="subtitle2" sx={{ color: "black" }}>Total Projects</Typography>
-            <Typography variant="h6" sx={{ fontWeight: "bold", color: "yellow" }}>{projects.length}</Typography>
+            <Typography variant="h6" sx={{ fontWeight: "bold", color: "warning.main" }}>{projects.length}</Typography>
           </Box>
           <Box>
             <Typography variant="subtitle2" sx={{ color: "black" }}>Total Beneficiaries</Typography>
-            <Typography variant="h6" sx={{ fontWeight: "bold", color: "yellow" }}>{totalBeneficiaries}</Typography>
+            <Typography variant="h6" sx={{ fontWeight: "bold", color: "warning.main" }}>{totalBeneficiaries}</Typography>
           </Box>
         </Box>
 
         {/* Add Project Button */}
         <Button
           variant="contained"
-          sx={{ bgcolor: "yellow", color: "black", "&:hover": { bgcolor: "#FFD700" } }}
+          sx={{ bgcolor: "warning.main", color: "black", "&:hover": { bgcolor: "warning.dark" } }}
           startIcon={<AddIcon />}
           onClick={handleOpen}
         >
@@ -135,24 +199,37 @@ const Dashboard = () => {
       <Grid container spacing={3}>
         {projects.length === 0 ? (
           <Grid item xs={12}>
-            <Card sx={{ border: "2px solid black", p: 4, textAlign: "center", bgcolor: "white" }}>
+            <Card sx={{ border: "2px solid black", p: 4, textAlign: "center", bgcolor: "white", borderRadius: 3 }}>
               <Typography variant="h6" sx={{ color: "black" }}>No projects found.</Typography>
             </Card>
           </Grid>
         ) : (
           projects.map((project) => (
             <Grid item xs={12} md={6} lg={4} key={project.id}>
-              <Card sx={{ display: "flex", border: "2px solid black", bgcolor: "white", color: "black", height: 180 }}>
+              <Card sx={{ display: "flex", border: "2px solid black", bgcolor: "white", color: "black", height: 180, borderRadius: 3, position: "relative" }}>
+                {/* Three dots menu */}
+                <IconButton
+                  sx={{ position: "absolute", top: 0, right: 0 }}
+                  onClick={(e) => handleMenuClick(e, project)}
+                >
+                  <MoreVertIcon />
+                </IconButton>
+
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleMenuClose}
+                >
+                  <MenuItem onClick={handleEditProject}>Edit Project</MenuItem>
+                  <MenuItem onClick={handleDeleteProject}>Delete Project</MenuItem>
+                </Menu>
+
                 <CardContent sx={{ flex: 1 }}>
                   <Typography variant="h6" sx={{ fontWeight: "bold" }}>{project.project_name}</Typography>
-                  <Typography sx={{ fontSize: 14, mt: 1 }}>{project.description}</Typography>
-                  <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
-                    {project.start_date} - {project.end_date}
-                  </Typography>
+                  <Typography sx={{ fontSize: 14, mt: 1 }}><strong>Description:</strong> {project.description}</Typography>
+                  <Typography variant="caption" sx={{ mt: 1, display: "block" }}><strong>Dates:</strong> {project.start_date} - {project.end_date}</Typography>
                   {project.participants !== undefined && (
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      Beneficiaries: {project.participants}
-                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}><strong>Beneficiaries:</strong> {project.participants}</Typography>
                   )}
                 </CardContent>
                 <CardMedia
@@ -167,9 +244,9 @@ const Dashboard = () => {
         )}
       </Grid>
 
-      {/* Add Project Dialog */}
+      {/* Add/Edit Project Dialog */}
       <Dialog open={openDialog} onClose={handleClose}>
-        <DialogTitle>Add New Project</DialogTitle>
+        <DialogTitle>{isEditMode ? "Edit Project" : "Add New Project"}</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
           <TextField label="Project Name" value={projectName} onChange={(e) => setProjectName(e.target.value)} fullWidth />
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth multiline rows={3} />
@@ -179,7 +256,9 @@ const Dashboard = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleAddProject} variant="contained" sx={{ bgcolor: "yellow", color: "black", "&:hover": { bgcolor: "#FFD700" } }}>Add</Button>
+          <Button onClick={handleAddOrEditProject} variant="contained" sx={{ bgcolor: "warning.main", color: "black", "&:hover": { bgcolor: "warning.dark" } }}>
+            {isEditMode ? "Save Changes" : "Add"}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
