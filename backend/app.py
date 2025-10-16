@@ -6,36 +6,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# COMPREHENSIVE CORS SETUP
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"],
-        "supports_credentials": True
-    }
-})
-
-# Manual CORS headers for additional security
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin in ['http://localhost:3000', 'http://127.0.0.1:3000']:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
-
-# Handle OPTIONS requests for CORS preflight
-@app.before_request
-def handle_options():
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'OK'})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        return response
+# SIMPLIFIED CORS CONFIG - Remove duplicate headers
+CORS(app)
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -166,6 +138,7 @@ def get_beneficiaries():
             "id": r[0],
             "learner_first_name": r[1],
             "learner_surname": r[2],
+            "learner_initials": r[3],
             "learner_id_number": r[5],
             "learning_programme_type": r[6],
             "programme_start_date": r[7],
@@ -195,6 +168,7 @@ def get_beneficiaries_by_project(project_id):
                 "id": r[0],
                 "learner_first_name": r[1],
                 "learner_surname": r[2],
+                "learner_initials": r[3],
                 "learner_id_number": r[5],
                 "learning_programme_type": r[6],
                 "programme_start_date": r[7],
@@ -215,13 +189,10 @@ def get_beneficiaries_by_project(project_id):
 @app.route('/beneficiaries', methods=['POST'])
 def add_beneficiary():
     try:
-        # Get data from JSON or form data
-        if request.is_json:
-            data = request.get_json()
-        else:
-            data = request.form.to_dict()
+        # Get data from form data
+        data = request.form.to_dict()
         
-        print("Received data:", data)  # Debug print
+        print("Received data for new beneficiary:", data)
         
         project_id = data.get('project_id')
 
@@ -292,15 +263,113 @@ def add_beneficiary():
         print(f"Error adding beneficiary: {str(e)}")
         return jsonify({"error": f"Failed to add beneficiary: {str(e)}"}), 500
 
-@app.route('/beneficiaries/<int:id>', methods=['DELETE'])
-def delete_beneficiary(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('DELETE FROM beneficiaries WHERE id=%s;', (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return jsonify({"message": "Beneficiary deleted successfully 🗑️"})
+@app.route('/beneficiaries/<int:beneficiary_id>', methods=['PUT'])
+def update_beneficiary(beneficiary_id):
+    try:
+        # Get data from form data
+        data = request.form.to_dict()
+        
+        print(f"Updating beneficiary {beneficiary_id} with data:", data)
+
+        # Helper to format dates
+        def format_date(date_str):
+            if not date_str:
+                return None
+            try:
+                if 'T' in date_str:
+                    date_str = date_str.split('T')[0]
+                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y'):
+                    try:
+                        return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
+                    except ValueError:
+                        continue
+                return date_str
+            except:
+                return None
+
+        programme_start = format_date(data.get('programme_start_date'))
+        programme_completion = format_date(data.get('programme_completion_date'))
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # First check if beneficiary exists
+        cur.execute('SELECT id FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
+        beneficiary = cur.fetchone()
+        
+        if not beneficiary:
+            return jsonify({"error": "Beneficiary not found"}), 404
+        
+        # Update the beneficiary
+        cur.execute(
+            '''
+            UPDATE beneficiaries SET
+                learner_first_name = %s,
+                learner_surname = %s,
+                learner_initials = %s,
+                learner_id_number = %s,
+                learning_programme_type = %s,
+                programme_start_date = %s,
+                programme_completion_date = %s,
+                programme_description = %s,
+                employer_name = %s,
+                learner_contact_number = %s,
+                learner_email = %s
+            WHERE id = %s;
+            ''',
+            (
+                data.get('learner_first_name', ''), 
+                data.get('learner_surname', ''), 
+                data.get('learner_initials', ''),
+                data.get('learner_id_number', ''), 
+                data.get('learning_programme_type', ''),
+                programme_start,
+                programme_completion,
+                data.get('programme_description', ''),
+                data.get('employer_name', ''),
+                data.get('learner_contact_number', ''), 
+                data.get('learner_email', ''),
+                beneficiary_id
+            )
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "message": "Beneficiary updated successfully ✅", 
+            "id": beneficiary_id
+        }), 200
+
+    except Exception as e:
+        print(f"Error updating beneficiary: {str(e)}")
+        return jsonify({"error": f"Failed to update beneficiary: {str(e)}"}), 500
+
+@app.route('/beneficiaries/<int:beneficiary_id>', methods=['DELETE'])
+def delete_beneficiary(beneficiary_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # First check if beneficiary exists
+        cur.execute('SELECT id FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
+        beneficiary = cur.fetchone()
+        
+        if not beneficiary:
+            return jsonify({"error": "Beneficiary not found"}), 404
+        
+        # Delete the beneficiary
+        cur.execute('DELETE FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"message": "Beneficiary deleted successfully 🗑️"}), 200
+
+    except Exception as e:
+        print(f"Error deleting beneficiary: {str(e)}")
+        return jsonify({"error": f"Failed to delete beneficiary: {str(e)}"}), 500
 
 # ===================== SERVE UPLOADED FILES ===================== #
 
