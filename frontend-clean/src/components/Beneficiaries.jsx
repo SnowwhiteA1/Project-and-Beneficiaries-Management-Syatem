@@ -89,6 +89,11 @@ const Beneficiaries = () => {
     fetchBeneficiaries();
   }, [projectId]);
 
+  // Debug selected beneficiary
+  useEffect(() => {
+    console.log("Selected Beneficiary:", selectedBeneficiary);
+  }, [selectedBeneficiary]);
+
   const fetchBeneficiaries = async () => {
     try {
       setLoading(true);
@@ -192,10 +197,12 @@ const Beneficiaries = () => {
   };
 
   // Edit beneficiary
-    // Edit beneficiary
   const handleEditBeneficiary = async () => {
     try {
-      if (!selectedBeneficiary) return;
+      if (!selectedBeneficiary) {
+        showSnackbar("No beneficiary selected", "error");
+        return;
+      }
 
       // Basic validation
       if (!editFormData.learner_first_name.trim() || !editFormData.learner_surname.trim()) {
@@ -210,19 +217,29 @@ const Beneficiaries = () => {
       formDataToSend.append('project_id', projectId);
       formDataToSend.append('learner_title', 'Mr');
 
-      console.log("Updating beneficiary:", selectedBeneficiary.id);
+      console.log("=== EDIT BENEFICIARY ===");
+      console.log("Beneficiary ID:", selectedBeneficiary.id);
+      console.log("Form Data:", Object.fromEntries(formDataToSend));
 
-      // FIXED URL: Using beneficiary_id instead of id
       const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
         method: "PUT",
         body: formDataToSend
       });
 
+      console.log("Response status:", res.status);
       const responseText = await res.text();
       console.log("Raw response:", responseText);
 
       if (!res.ok) {
-        throw new Error(`Server error: ${res.status} - ${responseText}`);
+        // Try to parse error message
+        let errorMsg = `Server error: ${res.status}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          errorMsg = responseText || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       const result = JSON.parse(responseText);
@@ -239,7 +256,7 @@ const Beneficiaries = () => {
       showSnackbar("Beneficiary updated successfully!");
       
     } catch (err) {
-      console.error("Error details:", err);
+      console.error("Error updating beneficiary:", err);
       showSnackbar(`Error updating beneficiary: ${err.message}`, "error");
     }
   };
@@ -247,17 +264,31 @@ const Beneficiaries = () => {
   // Delete beneficiary
   const handleDeleteBeneficiary = async () => {
     try {
-      if (!selectedBeneficiary) return;
+      if (!selectedBeneficiary) {
+        showSnackbar("No beneficiary selected", "error");
+        return;
+      }
 
-      console.log("Deleting beneficiary:", selectedBeneficiary.id);
+      console.log("=== DELETE BENEFICIARY ===");
+      console.log("Beneficiary ID:", selectedBeneficiary.id);
 
-      // FIXED URL: Using beneficiary_id instead of id
       const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
         method: "DELETE"
       });
 
+      console.log("Response status:", res.status);
+      
       if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
+        const errorText = await res.text();
+        console.log("Error response:", errorText);
+        let errorMsg = `Server error: ${res.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          errorMsg = errorText || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       const result = await res.json();
@@ -274,25 +305,29 @@ const Beneficiaries = () => {
       showSnackbar("Beneficiary deleted successfully!");
       
     } catch (err) {
-      console.error("Error details:", err);
+      console.error("Error deleting beneficiary:", err);
       showSnackbar(`Error deleting beneficiary: ${err.message}`, "error");
     }
   };
 
-
   // Action menu handlers
   const handleActionMenuOpen = (event, beneficiary) => {
+    console.log("Opening action menu for beneficiary:", beneficiary);
     setActionMenuAnchor(event.currentTarget);
     setSelectedBeneficiary(beneficiary);
   };
 
   const handleActionMenuClose = () => {
     setActionMenuAnchor(null);
-    setSelectedBeneficiary(null);
   };
 
   const handleEditClick = () => {
-    if (!selectedBeneficiary) return;
+    if (!selectedBeneficiary) {
+      showSnackbar("No beneficiary selected", "error");
+      return;
+    }
+    
+    console.log("Editing beneficiary:", selectedBeneficiary);
     
     // Pre-fill edit form with current data
     setEditFormData({
@@ -301,8 +336,8 @@ const Beneficiaries = () => {
       learner_initials: selectedBeneficiary.learner_initials || "",
       learner_id_number: selectedBeneficiary.learner_id_number || "",
       learning_programme_type: selectedBeneficiary.learning_programme_type || "",
-      programme_start_date: selectedBeneficiary.programme_start_date || "",
-      programme_completion_date: selectedBeneficiary.programme_completion_date || "",
+      programme_start_date: selectedBeneficiary.programme_start_date ? selectedBeneficiary.programme_start_date.split('T')[0] : "",
+      programme_completion_date: selectedBeneficiary.programme_completion_date ? selectedBeneficiary.programme_completion_date.split('T')[0] : "",
       programme_description: selectedBeneficiary.programme_description || "",
       employer_name: selectedBeneficiary.employer_name || "",
       learner_contact_number: selectedBeneficiary.learner_contact_number || "",
@@ -314,6 +349,10 @@ const Beneficiaries = () => {
   };
 
   const handleDeleteClick = () => {
+    if (!selectedBeneficiary) {
+      showSnackbar("No beneficiary selected", "error");
+      return;
+    }
     setOpenDeleteDialog(true);
     handleActionMenuClose();
   };

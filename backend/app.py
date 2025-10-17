@@ -269,7 +269,9 @@ def update_beneficiary(beneficiary_id):
         # Get data from form data
         data = request.form.to_dict()
         
-        print(f"Updating beneficiary {beneficiary_id} with data:", data)
+        print(f"=== UPDATE BENEFICIARY {beneficiary_id} ===")
+        print(f"Received data: {data}")
+        print(f"Beneficiary ID: {beneficiary_id}")
 
         # Helper to format dates
         def format_date(date_str):
@@ -294,14 +296,18 @@ def update_beneficiary(beneficiary_id):
         cur = conn.cursor()
         
         # First check if beneficiary exists
+        print(f"Checking if beneficiary {beneficiary_id} exists...")
         cur.execute('SELECT id FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
         beneficiary = cur.fetchone()
         
         if not beneficiary:
+            print(f"Beneficiary {beneficiary_id} not found!")
             return jsonify({"error": "Beneficiary not found"}), 404
         
+        print(f"Beneficiary {beneficiary_id} found, proceeding with update...")
+        
         # Update the beneficiary
-        cur.execute(
+        update_result = cur.execute(
             '''
             UPDATE beneficiaries SET
                 learner_first_name = %s,
@@ -337,6 +343,7 @@ def update_beneficiary(beneficiary_id):
         cur.close()
         conn.close()
 
+        print(f"Beneficiary {beneficiary_id} updated successfully!")
         return jsonify({
             "message": "Beneficiary updated successfully ✅", 
             "id": beneficiary_id
@@ -344,20 +351,28 @@ def update_beneficiary(beneficiary_id):
 
     except Exception as e:
         print(f"Error updating beneficiary: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to update beneficiary: {str(e)}"}), 500
 
 @app.route('/beneficiaries/<int:beneficiary_id>', methods=['DELETE'])
 def delete_beneficiary(beneficiary_id):
     try:
+        print(f"=== DELETE BENEFICIARY {beneficiary_id} ===")
+        
         conn = get_db_connection()
         cur = conn.cursor()
         
         # First check if beneficiary exists
+        print(f"Checking if beneficiary {beneficiary_id} exists...")
         cur.execute('SELECT id FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
         beneficiary = cur.fetchone()
         
         if not beneficiary:
+            print(f"Beneficiary {beneficiary_id} not found!")
             return jsonify({"error": "Beneficiary not found"}), 404
+        
+        print(f"Beneficiary {beneficiary_id} found, proceeding with deletion...")
         
         # Delete the beneficiary
         cur.execute('DELETE FROM beneficiaries WHERE id = %s;', (beneficiary_id,))
@@ -365,10 +380,13 @@ def delete_beneficiary(beneficiary_id):
         cur.close()
         conn.close()
 
+        print(f"Beneficiary {beneficiary_id} deleted successfully!")
         return jsonify({"message": "Beneficiary deleted successfully 🗑️"}), 200
 
     except Exception as e:
         print(f"Error deleting beneficiary: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to delete beneficiary: {str(e)}"}), 500
 
 # ===================== SERVE UPLOADED FILES ===================== #
