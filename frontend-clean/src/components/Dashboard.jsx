@@ -256,116 +256,172 @@ const Dashboard = () => {
       </Typography>
 
       {/* Projects Cards */}
-      <Grid container spacing={3} sx={{ justifyContent: "center" }}>
-        {projects.length === 0 ? (
-          <Grid item xs={12}>
-            <Card sx={{ border: "2px solid black", p: 4, textAlign: "center", bgcolor: "white", borderRadius: 3 }}>
-              <Typography variant="h6" sx={{ color: "black" }}>No projects found.</Typography>
-            </Card>
-          </Grid>
-        ) : (
-          projects.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id} sx={{ display: 'flex' }}>
-              <Card 
-                sx={{ 
-                  display: "flex", 
-                  flexDirection: "column", 
-                  border: "2px solid black", 
-                  bgcolor: "white", 
-                  color: "black", 
-                  borderRadius: 3, 
-                  position: "relative", 
-                  width: "100%",
-                  height: "320px",
-                  minHeight: "320px",
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: 4
-                  }
+
+      <Grid
+  container
+  spacing={3}
+  justifyContent="center"
+  alignItems="stretch"
+  sx={{ px: { md: 3 } }}
+>
+  {projects.length === 0 ? (
+    <Grid item xs={12}>
+      <Card
+        sx={{
+          border: "2px solid black",
+          p: 4,
+          textAlign: "center",
+          bgcolor: "white",
+          borderRadius: 3,
+        }}
+      >
+        <Typography variant="h6" sx={{ color: "black" }}>
+          No projects found.
+        </Typography>
+      </Card>
+    </Grid>
+  ) : (
+    projects.map((project) => (
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={4}
+        key={project.id}
+        sx={{ display: "flex", justifyContent: "center" }}
+      >
+        <Card
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            alignItems: "stretch",
+            border: "2px solid black",
+            bgcolor: "white",
+            color: "black",
+            borderRadius: 3,
+            width: "100%",
+            height: "400px", // equal height for all
+            maxWidth: "360px", // equal width for all
+            cursor: "pointer",
+            position: "relative",
+            transition: "transform 0.2s, box-shadow 0.2s",
+            "&:hover": {
+              transform: "translateY(-4px)",
+              boxShadow: 4,
+            },
+          }}
+          onClick={() => handleProjectClick(project.id)}
+        >
+          {/* Top right image + menu */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {project.image && (
+              <Avatar
+                src={`${IMAGE_URL}${project.image}`}
+                alt={project.project_name}
+                sx={{
+                  width: 36,
+                  height: 36,
+                  border: "1px solid #ddd",
+                  mr: 1,
                 }}
-                onClick={() => handleProjectClick(project.id)}
-              >
-                {/* Three dots menu and Image icon container */}
-                <Box sx={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center" }}>
-                  {/* Project image icon - positioned to the left of three dots */}
-                  {project.image && (
-                    <Avatar
-                      src={`${IMAGE_URL}${project.image}`}
-                      alt={project.project_name}
-                      sx={{ 
-                        width: 32, 
-                        height: 32, 
-                        border: "1px solid #ddd",
-                        mr: 1 
-                      }}
-                    />
-                  )}
-                  
-                  {/* Three dots menu */}
-                  <IconButton onClick={(e) => handleMenuClick(e, project)}>
-                    <MoreVertIcon />
-                  </IconButton>
-                </Box>
+              />
+            )}
+            <IconButton onClick={(e) => handleMenuClick(e, project)}>
+              <MoreVertIcon />
+            </IconButton>
+          </Box>
 
-                <CardContent sx={{ 
-                  flex: 1, 
-                  pt: 4,
-                  display: "flex",
-                  flexDirection: "column",
-                  height: "100%",
-                  overflow: "hidden"
-                }}>
-                  <Typography variant="h6" sx={{ fontWeight: "bold", mb: 1 }}>
-                    {project.project_name}
-                  </Typography>
-                  
-                  <Typography sx={{ 
-                    fontSize: 14, 
-                    mb: 2,
-                    overflow: "hidden",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 4,
-                    WebkitBoxOrient: "vertical",
-                    flex: 1,
-                    minHeight: "80px"
-                  }}>
-                    <strong>Description:</strong> {project.description}
-                  </Typography>
-                  
-                  <Box sx={{ mt: "auto" }}>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>Start Date:</strong> {project.start_date}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>End Date:</strong> {project.end_date}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>Duration:</strong> {calculateDuration(project.start_date, project.end_date)}
-                    </Typography>
-                    {project.participants !== undefined && (
-                      <Typography variant="body2" sx={{ mt: 1 }}>
-                        <strong>Beneficiaries:</strong> {project.participants}
-                      </Typography>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-
-              {/* Menu for the specific project */}
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl) && selectedProject?.id === project.id}
-                onClose={handleMenuClose}
+          {/* Content */}
+          <CardContent
+            sx={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              height: "100%",
+              pt: 5,
+              pb: 2,
+              px: 2,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: "bold",
+                  mb: 1,
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
               >
-                <MenuItem onClick={handleEditProject}>Edit Project</MenuItem>
-                <MenuItem onClick={handleDeleteProject}>Delete Project</MenuItem>
-              </Menu>
-            </Grid>
-          ))
-        )}
+                {project.project_name}
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  color: "text.secondary",
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3, // limit to 3 lines max
+                  WebkitBoxOrient: "vertical",
+                  textOverflow: "ellipsis",
+                  mb: 2,
+                  minHeight: "60px",
+                }}
+              >
+                {project.description}
+              </Typography>
+            </Box>
+
+            {/* Bottom details */}
+            <Box sx={{ mt: "auto" }}>
+              <Typography variant="body2">
+                <strong>Start:</strong> {project.start_date}
+              </Typography>
+              <Typography variant="body2">
+                <strong>End:</strong> {project.end_date}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Duration:</strong>{" "}
+                {calculateDuration(project.start_date, project.end_date)}
+              </Typography>
+              {project.participants !== undefined && (
+                <Typography variant="body2">
+                  <strong>Beneficiaries:</strong> {project.participants}
+                </Typography>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Menu for project */}
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl) && selectedProject?.id === project.id}
+          onClose={handleMenuClose}
+        >
+          <MenuItem onClick={handleEditProject}>Edit Project</MenuItem>
+          <MenuItem onClick={handleDeleteProject}>Delete Project</MenuItem>
+        </Menu>
       </Grid>
+    ))
+  )}
+</Grid>
+
+      
+     
 
       {/* Add/Edit Project Dialog */}
       <Dialog open={openDialog} onClose={handleClose} maxWidth="sm" fullWidth>

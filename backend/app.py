@@ -273,24 +273,33 @@ def update_beneficiary(beneficiary_id):
         print(f"Received data: {data}")
         print(f"Beneficiary ID: {beneficiary_id}")
 
-        # Helper to format dates
+        # Improved date formatting function
         def format_date(date_str):
             if not date_str:
                 return None
             try:
-                if 'T' in date_str:
-                    date_str = date_str.split('T')[0]
-                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y'):
+                # Remove any timezone or time information first
+                date_str = str(date_str).split('T')[0].split(' ')[0]
+                
+                # Try different date formats
+                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y', '%Y/%m/%d'):
                     try:
-                        return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
+                        parsed_date = datetime.strptime(date_str, fmt)
+                        return parsed_date.strftime('%Y-%m-%d')
                     except ValueError:
                         continue
-                return date_str
-            except:
+                
+                # If none of the formats work, try parsing with dateutil or return None
+                print(f"Warning: Could not parse date: {date_str}")
+                return None
+            except Exception as e:
+                print(f"Error parsing date {date_str}: {str(e)}")
                 return None
 
         programme_start = format_date(data.get('programme_start_date'))
         programme_completion = format_date(data.get('programme_completion_date'))
+
+        print(f"Formatted dates - Start: {programme_start}, Completion: {programme_completion}")
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -307,7 +316,7 @@ def update_beneficiary(beneficiary_id):
         print(f"Beneficiary {beneficiary_id} found, proceeding with update...")
         
         # Update the beneficiary
-        update_result = cur.execute(
+        cur.execute(
             '''
             UPDATE beneficiaries SET
                 learner_first_name = %s,
@@ -354,7 +363,6 @@ def update_beneficiary(beneficiary_id):
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to update beneficiary: {str(e)}"}), 500
-
 @app.route('/beneficiaries/<int:beneficiary_id>', methods=['DELETE'])
 def delete_beneficiary(beneficiary_id):
     try:

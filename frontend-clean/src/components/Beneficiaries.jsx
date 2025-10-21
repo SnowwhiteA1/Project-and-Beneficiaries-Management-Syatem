@@ -197,69 +197,90 @@ const Beneficiaries = () => {
   };
 
   // Edit beneficiary
-  const handleEditBeneficiary = async () => {
-    try {
-      if (!selectedBeneficiary) {
-        showSnackbar("No beneficiary selected", "error");
-        return;
-      }
-
-      // Basic validation
-      if (!editFormData.learner_first_name.trim() || !editFormData.learner_surname.trim()) {
-        showSnackbar("Please fill at least first name and last name", "error");
-        return;
-      }
-
-      const formDataToSend = new FormData();
-      Object.keys(editFormData).forEach(key => {
-        formDataToSend.append(key, editFormData[key]);
-      });
-      formDataToSend.append('project_id', projectId);
-      formDataToSend.append('learner_title', 'Mr');
-
-      console.log("=== EDIT BENEFICIARY ===");
-      console.log("Beneficiary ID:", selectedBeneficiary.id);
-      console.log("Form Data:", Object.fromEntries(formDataToSend));
-
-      const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
-        method: "PUT",
-        body: formDataToSend
-      });
-
-      console.log("Response status:", res.status);
-      const responseText = await res.text();
-      console.log("Raw response:", responseText);
-
-      if (!res.ok) {
-        // Try to parse error message
-        let errorMsg = `Server error: ${res.status}`;
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {
-          errorMsg = responseText || errorMsg;
-        }
-        throw new Error(errorMsg);
-      }
-
-      const result = JSON.parse(responseText);
-      console.log("Update success:", result);
-      
-      // Refresh the list
-      await fetchBeneficiaries();
-
-      // Reset and close dialogs
-      setOpenEditDialog(false);
-      setSelectedBeneficiary(null);
-      setActionMenuAnchor(null);
-      
-      showSnackbar("Beneficiary updated successfully!");
-      
-    } catch (err) {
-      console.error("Error updating beneficiary:", err);
-      showSnackbar(`Error updating beneficiary: ${err.message}`, "error");
+  // Edit beneficiary
+const handleEditBeneficiary = async () => {
+  try {
+    if (!selectedBeneficiary) {
+      showSnackbar("No beneficiary selected", "error");
+      return;
     }
-  };
+
+    // Basic validation
+    if (!editFormData.learner_first_name.trim() || !editFormData.learner_surname.trim()) {
+      showSnackbar("Please fill at least first name and last name", "error");
+      return;
+    }
+
+    const formDataToSend = new FormData();
+    
+    // Format dates properly before sending
+    Object.keys(editFormData).forEach(key => {
+      let value = editFormData[key];
+      
+      // Ensure date fields are in YYYY-MM-DD format
+      if (key.includes('date') && value) {
+        try {
+          // If it's already in correct format, keep it
+          if (!value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const date = new Date(value);
+            if (!isNaN(date.getTime())) {
+              value = date.toISOString().split('T')[0];
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not format date for ${key}:`, value);
+        }
+      }
+      
+      formDataToSend.append(key, value);
+    });
+    
+    formDataToSend.append('project_id', projectId);
+    formDataToSend.append('learner_title', 'Mr');
+
+    console.log("=== EDIT BENEFICIARY ===");
+    console.log("Beneficiary ID:", selectedBeneficiary.id);
+    console.log("Form Data:", Object.fromEntries(formDataToSend));
+
+    const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
+      method: "PUT",
+      body: formDataToSend
+    });
+
+    console.log("Response status:", res.status);
+    const responseText = await res.text();
+    console.log("Raw response:", responseText);
+
+    if (!res.ok) {
+      // Try to parse error message
+      let errorMsg = `Server error: ${res.status}`;
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+        errorMsg = responseText || errorMsg;
+      }
+      throw new Error(errorMsg);
+    }
+
+    const result = JSON.parse(responseText);
+    console.log("Update success:", result);
+    
+    // Refresh the list
+    await fetchBeneficiaries();
+
+    // Reset and close dialogs
+    setOpenEditDialog(false);
+    setSelectedBeneficiary(null);
+    setActionMenuAnchor(null);
+    
+    showSnackbar("Beneficiary updated successfully!");
+    
+  } catch (err) {
+    console.error("Error updating beneficiary:", err);
+    showSnackbar(`Error updating beneficiary: ${err.message}`, "error");
+  }
+};
 
   // Delete beneficiary
   const handleDeleteBeneficiary = async () => {
@@ -322,31 +343,48 @@ const Beneficiaries = () => {
   };
 
   const handleEditClick = () => {
-    if (!selectedBeneficiary) {
-      showSnackbar("No beneficiary selected", "error");
-      return;
+  if (!selectedBeneficiary) {
+    showSnackbar("No beneficiary selected", "error");
+    return;
+  }
+  
+  console.log("Editing beneficiary:", selectedBeneficiary);
+  
+  // Helper function to format date for input fields
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return "";
+    try {
+      // If it's already in YYYY-MM-DD format, return as-is
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateString;
+      }
+      // Otherwise, parse and format it
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "";
+      return date.toISOString().split('T')[0];
+    } catch {
+      return "";
     }
-    
-    console.log("Editing beneficiary:", selectedBeneficiary);
-    
-    // Pre-fill edit form with current data
-    setEditFormData({
-      learner_first_name: selectedBeneficiary.learner_first_name || "",
-      learner_surname: selectedBeneficiary.learner_surname || "",
-      learner_initials: selectedBeneficiary.learner_initials || "",
-      learner_id_number: selectedBeneficiary.learner_id_number || "",
-      learning_programme_type: selectedBeneficiary.learning_programme_type || "",
-      programme_start_date: selectedBeneficiary.programme_start_date ? selectedBeneficiary.programme_start_date.split('T')[0] : "",
-      programme_completion_date: selectedBeneficiary.programme_completion_date ? selectedBeneficiary.programme_completion_date.split('T')[0] : "",
-      programme_description: selectedBeneficiary.programme_description || "",
-      employer_name: selectedBeneficiary.employer_name || "",
-      learner_contact_number: selectedBeneficiary.learner_contact_number || "",
-      learner_email: selectedBeneficiary.learner_email || "",
-    });
-    
-    setOpenEditDialog(true);
-    handleActionMenuClose();
   };
+  
+  // Pre-fill edit form with current data
+  setEditFormData({
+    learner_first_name: selectedBeneficiary.learner_first_name || "",
+    learner_surname: selectedBeneficiary.learner_surname || "",
+    learner_initials: selectedBeneficiary.learner_initials || "",
+    learner_id_number: selectedBeneficiary.learner_id_number || "",
+    learning_programme_type: selectedBeneficiary.learning_programme_type || "",
+    programme_start_date: formatDateForInput(selectedBeneficiary.programme_start_date),
+    programme_completion_date: formatDateForInput(selectedBeneficiary.programme_completion_date),
+    programme_description: selectedBeneficiary.programme_description || "",
+    employer_name: selectedBeneficiary.employer_name || "",
+    learner_contact_number: selectedBeneficiary.learner_contact_number || "",
+    learner_email: selectedBeneficiary.learner_email || "",
+  });
+  
+  setOpenEditDialog(true);
+  handleActionMenuClose();
+};
 
   const handleDeleteClick = () => {
     if (!selectedBeneficiary) {
