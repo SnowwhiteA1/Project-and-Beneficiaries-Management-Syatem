@@ -14,17 +14,11 @@ import {
   TextField,
   Divider,
   CircularProgress,
-  IconButton,
-  Menu,
-  MenuItem,
   Chip,
   Snackbar,
   Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import { useParams, useNavigate } from "react-router-dom";
 
 const companyLogo = "/logo.jpeg";
@@ -34,11 +28,7 @@ const Beneficiaries = () => {
   const navigate = useNavigate();
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
-  const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [actionMenuAnchor, setActionMenuAnchor] = useState(null);
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   
   const [formData, setFormData] = useState({
@@ -46,6 +36,7 @@ const Beneficiaries = () => {
     learner_surname: "",
     learner_initials: "",
     learner_id_number: "",
+    learner_title: "",
     learning_programme_type: "",
     programme_start_date: "",
     programme_completion_date: "",
@@ -53,28 +44,15 @@ const Beneficiaries = () => {
     employer_name: "",
     learner_contact_number: "",
     learner_email: "",
+    uploaded_file: null,
   });
 
-  const [editFormData, setEditFormData] = useState({
-    learner_first_name: "",
-    learner_surname: "",
-    learner_initials: "",
-    learner_id_number: "",
-    learning_programme_type: "",
-    programme_start_date: "",
-    programme_completion_date: "",
-    programme_description: "",
-    employer_name: "",
-    learner_contact_number: "",
-    learner_email: "",
-  });
-
-  // Field labels for better display
   const fieldLabels = {
     learner_first_name: "First Name *",
     learner_surname: "Last Name *", 
     learner_initials: "Initials",
     learner_id_number: "ID Number",
+    learner_title: "Title",
     learning_programme_type: "Programme Type",
     programme_start_date: "Start Date",
     programme_completion_date: "End Date",
@@ -89,23 +67,12 @@ const Beneficiaries = () => {
     fetchBeneficiaries();
   }, [projectId]);
 
-  // Debug selected beneficiary
-  useEffect(() => {
-    console.log("Selected Beneficiary:", selectedBeneficiary);
-  }, [selectedBeneficiary]);
-
   const fetchBeneficiaries = async () => {
     try {
       setLoading(true);
-      console.log("Fetching beneficiaries for project:", projectId);
       const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${projectId}`);
-      
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      console.log("Fetched beneficiaries:", data);
       setBeneficiaries(data);
     } catch (err) {
       console.error("Error fetching beneficiaries:", err);
@@ -115,69 +82,56 @@ const Beneficiaries = () => {
     }
   };
 
-  // Show snackbar notification
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
   };
 
-  // Handle form input
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData({ ...editFormData, [name]: value });
+  const handleFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      setFormData({ ...formData, uploaded_file: e.target.files[0] });
+    }
   };
 
   // Add beneficiary
   const handleAddBeneficiary = async () => {
     try {
-      // Basic validation
-      if (!formData.learner_first_name.trim() || !formData.learner_surname.trim()) {
-        showSnackbar("Please fill at least first name and last name", "error");
-        return;
-      }
-
-      // Create FormData object
       const formDataToSend = new FormData();
-      
-      // Add all form fields
-      Object.keys(formData).forEach(key => {
-        formDataToSend.append(key, formData[key]);
-      });
-      
-      // Add project_id and required fields
-      formDataToSend.append('project_id', projectId);
-      formDataToSend.append('learner_title', 'Mr'); // Default value
 
-      console.log("Sending form data...");
+      // Append all fields
+      Object.keys(formData).forEach(key => {
+        if (key !== "uploaded_file") {
+          formDataToSend.append(key, formData[key]);
+        }
+      });
+
+      // Append project ID
+      formDataToSend.append('project_enrolled', projectId);
+
+      // Append uploaded file if exists
+      if (formData.uploaded_file) {
+        formDataToSend.append('uploaded_file', formData.uploaded_file);
+      }
 
       const res = await fetch("http://127.0.0.1:5050/beneficiaries", {
         method: "POST",
-        body: formDataToSend
+        body: formDataToSend,
       });
 
-      const responseText = await res.text();
-      console.log("Raw response:", responseText);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add beneficiary");
 
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status} - ${responseText}`);
-      }
-
-      const result = JSON.parse(responseText);
-      console.log("Success:", result);
-      
-      // Refresh the list
-      await fetchBeneficiaries();
-
-      // Reset form and close dialog
+      showSnackbar("Beneficiary added successfully!");
       setFormData({
         learner_first_name: "",
         learner_surname: "",
         learner_initials: "",
         learner_id_number: "",
+        learner_title: "",
         learning_programme_type: "",
         programme_start_date: "",
         programme_completion_date: "",
@@ -185,222 +139,16 @@ const Beneficiaries = () => {
         employer_name: "",
         learner_contact_number: "",
         learner_email: "",
+        uploaded_file: null,
       });
       setOpenDialog(false);
-      
-      showSnackbar("Beneficiary added successfully!");
-      
+      fetchBeneficiaries();
     } catch (err) {
-      console.error("Error details:", err);
-      showSnackbar(`Error adding beneficiary: ${err.message}`, "error");
+      console.error(err);
+      showSnackbar(err.message, "error");
     }
   };
 
-  // Edit beneficiary
-  // Edit beneficiary
-const handleEditBeneficiary = async () => {
-  try {
-    if (!selectedBeneficiary) {
-      showSnackbar("No beneficiary selected", "error");
-      return;
-    }
-
-    // Basic validation
-    if (!editFormData.learner_first_name.trim() || !editFormData.learner_surname.trim()) {
-      showSnackbar("Please fill at least first name and last name", "error");
-      return;
-    }
-
-    const formDataToSend = new FormData();
-    
-    // Format dates properly before sending
-    Object.keys(editFormData).forEach(key => {
-      let value = editFormData[key];
-      
-      // Ensure date fields are in YYYY-MM-DD format
-      if (key.includes('date') && value) {
-        try {
-          // If it's already in correct format, keep it
-          if (!value.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            const date = new Date(value);
-            if (!isNaN(date.getTime())) {
-              value = date.toISOString().split('T')[0];
-            }
-          }
-        } catch (e) {
-          console.warn(`Could not format date for ${key}:`, value);
-        }
-      }
-      
-      formDataToSend.append(key, value);
-    });
-    
-    formDataToSend.append('project_id', projectId);
-    formDataToSend.append('learner_title', 'Mr');
-
-    console.log("=== EDIT BENEFICIARY ===");
-    console.log("Beneficiary ID:", selectedBeneficiary.id);
-    console.log("Form Data:", Object.fromEntries(formDataToSend));
-
-    const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
-      method: "PUT",
-      body: formDataToSend
-    });
-
-    console.log("Response status:", res.status);
-    const responseText = await res.text();
-    console.log("Raw response:", responseText);
-
-    if (!res.ok) {
-      // Try to parse error message
-      let errorMsg = `Server error: ${res.status}`;
-      try {
-        const errorData = JSON.parse(responseText);
-        errorMsg = errorData.error || errorMsg;
-      } catch (e) {
-        errorMsg = responseText || errorMsg;
-      }
-      throw new Error(errorMsg);
-    }
-
-    const result = JSON.parse(responseText);
-    console.log("Update success:", result);
-    
-    // Refresh the list
-    await fetchBeneficiaries();
-
-    // Reset and close dialogs
-    setOpenEditDialog(false);
-    setSelectedBeneficiary(null);
-    setActionMenuAnchor(null);
-    
-    showSnackbar("Beneficiary updated successfully!");
-    
-  } catch (err) {
-    console.error("Error updating beneficiary:", err);
-    showSnackbar(`Error updating beneficiary: ${err.message}`, "error");
-  }
-};
-
-  // Delete beneficiary
-  const handleDeleteBeneficiary = async () => {
-    try {
-      if (!selectedBeneficiary) {
-        showSnackbar("No beneficiary selected", "error");
-        return;
-      }
-
-      console.log("=== DELETE BENEFICIARY ===");
-      console.log("Beneficiary ID:", selectedBeneficiary.id);
-
-      const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
-        method: "DELETE"
-      });
-
-      console.log("Response status:", res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.log("Error response:", errorText);
-        let errorMsg = `Server error: ${res.status}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {
-          errorMsg = errorText || errorMsg;
-        }
-        throw new Error(errorMsg);
-      }
-
-      const result = await res.json();
-      console.log("Delete success:", result);
-      
-      // Refresh the list
-      await fetchBeneficiaries();
-
-      // Reset selection and close dialogs
-      setSelectedBeneficiary(null);
-      setActionMenuAnchor(null);
-      setOpenDeleteDialog(false);
-      
-      showSnackbar("Beneficiary deleted successfully!");
-      
-    } catch (err) {
-      console.error("Error deleting beneficiary:", err);
-      showSnackbar(`Error deleting beneficiary: ${err.message}`, "error");
-    }
-  };
-
-  // Action menu handlers
-  const handleActionMenuOpen = (event, beneficiary) => {
-    console.log("Opening action menu for beneficiary:", beneficiary);
-    setActionMenuAnchor(event.currentTarget);
-    setSelectedBeneficiary(beneficiary);
-  };
-
-  const handleActionMenuClose = () => {
-    setActionMenuAnchor(null);
-  };
-
-  const handleEditClick = () => {
-  if (!selectedBeneficiary) {
-    showSnackbar("No beneficiary selected", "error");
-    return;
-  }
-  
-  console.log("Editing beneficiary:", selectedBeneficiary);
-  
-  // Helper function to format date for input fields
-  const formatDateForInput = (dateString) => {
-    if (!dateString) return "";
-    try {
-      // If it's already in YYYY-MM-DD format, return as-is
-      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return dateString;
-      }
-      // Otherwise, parse and format it
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "";
-      return date.toISOString().split('T')[0];
-    } catch {
-      return "";
-    }
-  };
-  
-  // Pre-fill edit form with current data
-  setEditFormData({
-    learner_first_name: selectedBeneficiary.learner_first_name || "",
-    learner_surname: selectedBeneficiary.learner_surname || "",
-    learner_initials: selectedBeneficiary.learner_initials || "",
-    learner_id_number: selectedBeneficiary.learner_id_number || "",
-    learning_programme_type: selectedBeneficiary.learning_programme_type || "",
-    programme_start_date: formatDateForInput(selectedBeneficiary.programme_start_date),
-    programme_completion_date: formatDateForInput(selectedBeneficiary.programme_completion_date),
-    programme_description: selectedBeneficiary.programme_description || "",
-    employer_name: selectedBeneficiary.employer_name || "",
-    learner_contact_number: selectedBeneficiary.learner_contact_number || "",
-    learner_email: selectedBeneficiary.learner_email || "",
-  });
-  
-  setOpenEditDialog(true);
-  handleActionMenuClose();
-};
-
-  const handleDeleteClick = () => {
-    if (!selectedBeneficiary) {
-      showSnackbar("No beneficiary selected", "error");
-      return;
-    }
-    setOpenDeleteDialog(true);
-    handleActionMenuClose();
-  };
-
-  const handleCancelDelete = () => {
-    setOpenDeleteDialog(false);
-    setSelectedBeneficiary(null);
-  };
-
-  // Format date for display
   const formatDisplayDate = (dateString) => {
     if (!dateString) return "Not set";
     try {
@@ -410,15 +158,13 @@ const handleEditBeneficiary = async () => {
     }
   };
 
-  // Check if programme is active
   const isProgrammeActive = (startDate, endDate) => {
     if (!startDate) return false;
     const today = new Date();
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : null;
-    
-    if (end && today > end) return false; // Completed
-    return today >= start; // Active or upcoming
+    if (end && today > end) return false;
+    return today >= start;
   };
 
   if (loading) {
@@ -472,29 +218,16 @@ const handleEditBeneficiary = async () => {
         <Grid container spacing={3}>
           {beneficiaries.map((b) => {
             const isActive = isProgrammeActive(b.programme_start_date, b.programme_completion_date);
-            
             return (
               <Grid item xs={12} sm={6} md={4} key={b.id}>
                 <Card sx={{ 
                   borderRadius: "12px", 
                   boxShadow: 3, 
                   p: 2, 
-                  position: 'relative',
                   border: isActive ? '2px solid #4CAF50' : '2px solid transparent',
                   transition: 'all 0.3s ease',
-                  '&:hover': {
-                    boxShadow: 6,
-                    transform: 'translateY(-2px)'
-                  }
+                  '&:hover': { boxShadow: 6, transform: 'translateY(-2px)' }
                 }}>
-                  {/* Action Menu Button */}
-                  <IconButton 
-                    sx={{ position: 'absolute', top: 8, right: 8 }}
-                    onClick={(e) => handleActionMenuOpen(e, b)}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-
                   <CardContent sx={{ pt: 1 }}>
                     <Typography variant="h6" gutterBottom sx={{ pr: 4 }}>
                       {b.learner_first_name} {b.learner_surname}
@@ -502,50 +235,22 @@ const handleEditBeneficiary = async () => {
                     </Typography>
                     
                     <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <Chip 
-                        label={b.learning_programme_type || "No Programme"} 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined"
-                      />
-                      {isActive && (
-                        <Chip 
-                          label="Active" 
-                          size="small" 
-                          color="success" 
-                        />
-                      )}
+                      <Chip label={b.learning_programme_type || "No Programme"} size="small" color="primary" variant="outlined"/>
+                      {isActive && <Chip label="Active" size="small" color="success" />}
                     </Box>
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {b.learner_id_number && (
+                      {b.learner_id_number && <Typography variant="body2"><strong>ID:</strong> {b.learner_id_number}</Typography>}
+                      {b.employer_name && <Typography variant="body2"><strong>Employer:</strong> {b.employer_name}</Typography>}
+                      {b.programme_description && <Typography variant="body2"><strong>Qualification:</strong> {b.programme_description}</Typography>}
+                      {b.learner_email && <Typography variant="body2"><strong>Email:</strong> {b.learner_email}</Typography>}
+                      {b.learner_contact_number && <Typography variant="body2"><strong>Contact:</strong> {b.learner_contact_number}</Typography>}
+                      <Typography variant="body2"><strong>Duration:</strong> {formatDisplayDate(b.programme_start_date)} → {formatDisplayDate(b.programme_completion_date)}</Typography>
+                      {b.uploaded_file && (
                         <Typography variant="body2">
-                          <strong>ID:</strong> {b.learner_id_number}
+                          <strong>File:</strong> <a href={`http://127.0.0.1:5050/uploads/${b.uploaded_file}`} target="_blank" rel="noreferrer">View</a>
                         </Typography>
                       )}
-                      {b.employer_name && (
-                        <Typography variant="body2">
-                          <strong>Employer:</strong> {b.employer_name}
-                        </Typography>
-                      )}
-                      {b.programme_description && (
-                        <Typography variant="body2">
-                          <strong>Qualification:</strong> {b.programme_description}
-                        </Typography>
-                      )}
-                      {b.learner_email && (
-                        <Typography variant="body2">
-                          <strong>Email:</strong> {b.learner_email}
-                        </Typography>
-                      )}
-                      {b.learner_contact_number && (
-                        <Typography variant="body2">
-                          <strong>Contact:</strong> {b.learner_contact_number}
-                        </Typography>
-                      )}
-                      <Typography variant="body2">
-                        <strong>Duration:</strong> {formatDisplayDate(b.programme_start_date)} → {formatDisplayDate(b.programme_completion_date)}
-                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -560,7 +265,7 @@ const handleEditBeneficiary = async () => {
         <DialogTitle>Add New Beneficiary</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            {Object.keys(formData).map((field) => (
+            {Object.keys(formData).filter(f => f !== 'uploaded_file').map((field) => (
               <Grid item xs={12} sm={6} key={field}>
                 <TextField
                   label={fieldLabels[field]}
@@ -575,6 +280,11 @@ const handleEditBeneficiary = async () => {
                 />
               </Grid>
             ))}
+
+            {/* File Upload */}
+            <Grid item xs={12}>
+              <input type="file" onChange={handleFileChange} />
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -585,86 +295,14 @@ const handleEditBeneficiary = async () => {
         </DialogActions>
       </Dialog>
 
-      {/* Edit Beneficiary Dialog */}
-      <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} fullWidth maxWidth="md">
-        <DialogTitle>Edit Beneficiary</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            {Object.keys(editFormData).map((field) => (
-              <Grid item xs={12} sm={6} key={field}>
-                <TextField
-                  label={fieldLabels[field]}
-                  name={field}
-                  value={editFormData[field]}
-                  onChange={handleEditInputChange}
-                  fullWidth
-                  size="small"
-                  type={field.includes('date') ? 'date' : 'text'}
-                  InputLabelProps={field.includes('date') ? { shrink: true } : {}}
-                  required={fieldLabels[field].includes('*')}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenEditDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleEditBeneficiary}>
-            Update Beneficiary
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={openDeleteDialog} onClose={handleCancelDelete}>
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete{" "}
-            <strong>
-              {selectedBeneficiary?.learner_first_name} {selectedBeneficiary?.learner_surname}
-            </strong>
-            ? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelDelete}>Cancel</Button>
-          <Button 
-            onClick={handleDeleteBeneficiary} 
-            variant="contained" 
-            color="error"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Action Menu */}
-      <Menu
-        anchorEl={actionMenuAnchor}
-        open={Boolean(actionMenuAnchor)}
-        onClose={handleActionMenuClose}
-      >
-        <MenuItem onClick={handleEditClick}>
-          <EditIcon sx={{ mr: 1, fontSize: 20 }} /> Edit
-        </MenuItem>
-        <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
-          <DeleteIcon sx={{ mr: 1, fontSize: 20 }} /> Delete
-        </MenuItem>
-      </Menu>
-
-      {/* Snackbar for notifications */}
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
