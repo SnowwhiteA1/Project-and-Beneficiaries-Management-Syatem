@@ -24,8 +24,13 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  IconButton,
+  Menu,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useParams, useNavigate } from "react-router-dom";
 
 const companyLogo = "/logo.jpeg";
@@ -35,9 +40,13 @@ const Beneficiaries = () => {
   const navigate = useNavigate();
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [activeStep, setActiveStep] = useState(0);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Form data with all required fields
   const [formData, setFormData] = useState({
@@ -203,7 +212,6 @@ const Beneficiaries = () => {
   const fetchBeneficiaries = async () => {
     try {
       setLoading(true);
-      // FIXED: Using the correct endpoint from your backend
       const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${projectId}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
@@ -239,7 +247,54 @@ const Beneficiaries = () => {
     setActiveStep((prevStep) => prevStep - 1);
   };
 
-  // Add beneficiary - FIXED VERSION
+  // Menu handlers
+  const handleMenuOpen = (event, beneficiary) => {
+    setMenuAnchorEl(event.currentTarget);
+    setSelectedBeneficiary(beneficiary);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleEdit = () => {
+    if (selectedBeneficiary) {
+      // Populate form with existing data
+      const editFormData = { ...formData };
+      Object.keys(selectedBeneficiary).forEach(key => {
+        if (editFormData.hasOwnProperty(key)) {
+          editFormData[key] = selectedBeneficiary[key] || '';
+        }
+      });
+      setFormData(editFormData);
+      setOpenEditDialog(true);
+    }
+    handleMenuClose();
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteConfirmOpen(true);
+    handleMenuClose();
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete beneficiary");
+
+      showSnackbar("Beneficiary deleted successfully");
+      setDeleteConfirmOpen(false);
+      fetchBeneficiaries();
+    } catch (err) {
+      console.error("Error deleting beneficiary:", err);
+      showSnackbar(err.message, "error");
+    }
+  };
+
+  // Add beneficiary
   const handleAddBeneficiary = async () => {
     try {
       const formDataToSend = new FormData();
@@ -260,7 +315,7 @@ const Beneficiaries = () => {
       
       const res = await fetch("http://127.0.0.1:5050/beneficiaries", {
         method: "POST",
-        body: formDataToSend, // Using FormData directly, no Content-Type header
+        body: formDataToSend,
       });
 
       const data = await res.json();
@@ -282,6 +337,51 @@ const Beneficiaries = () => {
       fetchBeneficiaries();
     } catch (err) {
       console.error("Error adding beneficiary:", err);
+      showSnackbar(err.message, "error");
+    }
+  };
+
+  // Update beneficiary
+  const handleUpdateBeneficiary = async () => {
+    try {
+      const formDataToSend = new FormData();
+      
+      // Append all form data
+      Object.keys(formData).forEach((key) => {
+        if (key !== "uploaded_file") {
+          formDataToSend.append(key, formData[key] || '');
+        }
+      });
+      
+      // Append file if exists
+      if (formData.uploaded_file) {
+        formDataToSend.append("file", formData.uploaded_file);
+      }
+
+      const res = await fetch(`http://127.0.0.1:5050/beneficiaries/${selectedBeneficiary.id}`, {
+        method: "PUT",
+        body: formDataToSend,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update beneficiary");
+
+      showSnackbar("Beneficiary updated successfully!");
+      setOpenEditDialog(false);
+      setActiveStep(0);
+      
+      // Reset form
+      const resetForm = {
+        ...Object.fromEntries(
+          Object.keys(formData).map(key => [key, key === 'project_enrolled' ? projectId : ''])
+        ),
+        learner_title: "Mr"
+      };
+      setFormData(resetForm);
+      
+      fetchBeneficiaries();
+    } catch (err) {
+      console.error("Error updating beneficiary:", err);
       showSnackbar(err.message, "error");
     }
   };
@@ -369,6 +469,13 @@ const Beneficiaries = () => {
             <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
               Accepted formats: PDF, Word, JPEG, PNG
             </Typography>
+            {selectedBeneficiary?.uploaded_file && (
+              <FormControlLabel
+                control={<Checkbox />}
+                label="Keep existing file"
+                sx={{ mt: 1 }}
+              />
+            )}
           </Grid>
         )}
       </Grid>
@@ -436,8 +543,21 @@ const Beneficiaries = () => {
                     border: isActive ? "2px solid #4CAF50" : "2px solid transparent",
                     transition: "all 0.3s ease",
                     "&:hover": { boxShadow: 6, transform: "translateY(-2px)" },
+                    position: "relative",
                   }}
                 >
+                  {/* Three dots menu */}
+                  <IconButton
+                    sx={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                    }}
+                    onClick={(e) => handleMenuOpen(e, b)}
+                  >
+                    <MoreVertIcon />
+                  </IconButton>
+
                   <CardContent sx={{ pt: 1 }}>
                     <Typography variant="h6" gutterBottom sx={{ pr: 4 }}>
                       {b.learner_first_name} {b.learner_surname}
@@ -511,7 +631,7 @@ const Beneficiaries = () => {
         </Grid>
       )}
 
-      {/* Add Beneficiary Dialog - FIXED HYDRATION ERROR */}
+      {/* Add Beneficiary Dialog */}
       <Dialog open={openDialog} onClose={() => { setOpenDialog(false); setActiveStep(0); }} fullWidth maxWidth="lg">
         <DialogTitle>
           <Box>
@@ -551,6 +671,76 @@ const Beneficiaries = () => {
               </Button>
             )}
           </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Beneficiary Dialog */}
+      <Dialog open={openEditDialog} onClose={() => { setOpenEditDialog(false); setActiveStep(0); }} fullWidth maxWidth="lg">
+        <DialogTitle>
+          <Box>
+            <Typography variant="h6" component="div">
+              Edit Beneficiary
+            </Typography>
+            <Stepper activeStep={activeStep} sx={{ mt: 2 }}>
+              {steps.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ minHeight: '400px' }}>
+          {getStepContent(activeStep)}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+          <Button 
+            onClick={handleBack} 
+            disabled={activeStep === 0}
+          >
+            Back
+          </Button>
+          <Box>
+            <Button onClick={() => { setOpenEditDialog(false); setActiveStep(0); }} sx={{ mr: 1 }}>
+              Cancel
+            </Button>
+            {activeStep === steps.length - 1 ? (
+              <Button variant="contained" onClick={handleUpdateBeneficiary}>
+                Update Beneficiary
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={handleNext}>
+                Next
+              </Button>
+            )}
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Three dots menu */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem onClick={handleEdit}>Edit</MenuItem>
+        <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>Delete</MenuItem>
+      </Menu>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete {selectedBeneficiary?.learner_first_name} {selectedBeneficiary?.learner_surname}?
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Delete
+          </Button>
         </DialogActions>
       </Dialog>
 
