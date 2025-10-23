@@ -139,6 +139,7 @@ def get_beneficiaries():
     conn.close()
     return jsonify(beneficiaries)
 
+# ADD THIS MISSING ENDPOINT - FIXES THE 404 ERROR
 @app.route('/beneficiaries/<project_id>', methods=['GET'])
 def get_beneficiaries_by_project(project_id):
     try:
@@ -154,7 +155,7 @@ def get_beneficiaries_by_project(project_id):
         conn.close()
         return jsonify(beneficiaries)
     except Exception as e:
-        print(f"Error fetching beneficiaries: {str(e)}")
+        print(f"Error fetching beneficiaries by project: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/beneficiaries', methods=['POST'])
@@ -189,8 +190,23 @@ def add_beneficiary():
             except:
                 return None
 
+        # Format date fields
         programme_start = format_date(data.get('programme_start_date'))
         programme_completion = format_date(data.get('programme_completion_date'))
+        certificate_issue = format_date(data.get('certificate_issue_date'))
+        accreditation_start = format_date(data.get('training_provider_accreditation_start_date'))
+
+        # Handle numeric fields
+        def format_numeric(value):
+            if not value:
+                return None
+            try:
+                return float(value)
+            except:
+                return None
+
+        amount_spent = format_numeric(data.get('amount_spent_per_learner'))
+        intervention_credit = format_numeric(data.get('non_nqf_intervention_credit'))
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -199,24 +215,78 @@ def add_beneficiary():
             INSERT INTO beneficiaries (
                 learner_first_name, learner_surname, learner_initials, learner_title,
                 learner_id_number, learning_programme_type, programme_start_date, 
-                programme_completion_date, programme_description, employer_name,
-                learner_contact_number, learner_email, project_enrolled, uploaded_file
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                programme_completion_date, certificate_issue_date, ofo_code,
+                nqf_level, programme_description, employer_name, employer_sdl_number,
+                employer_contact_details, training_provider_name, training_provider_sdl_number,
+                training_provider_contact_details, training_provider_type, training_provider_province,
+                learner_province, learner_local_district, learner_residential_area, learner_area_type,
+                learner_physical_address_code, programme_funding_type, amount_spent_per_learner,
+                key_dev_transformation, project_number, activity_number, app_sub_programme,
+                learner_contact_number, learner_email, learner_parent_contact, non_nqf_intervention_subfield_id,
+                non_nqf_intervention_status_id, non_nqf_intervention_credit, unit_standard_id,
+                training_provider_code, training_provider_etqa_id, training_provider_postal_address,
+                training_provider_accreditation_start_date, training_provider_province_code,
+                training_provider_physical_address, learner_home_language, agreement_number,
+                learner_last_school_emis, learner_last_school_year, learner_stats_area_code,
+                additional_documents, project_enrolled, uploaded_file
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
             RETURNING id;
             ''',
             (
                 data.get('learner_first_name', ''), 
                 data.get('learner_surname', ''), 
                 data.get('learner_initials', ''),
-                data.get('learner_title', 'Mr'),
+                data.get('learner_title', ''),
                 data.get('learner_id_number', ''), 
                 data.get('learning_programme_type', ''),
                 programme_start,
                 programme_completion,
+                certificate_issue,
+                data.get('ofo_code', ''),
+                data.get('nqf_level', ''),
                 data.get('programme_description', ''),
                 data.get('employer_name', ''),
+                data.get('employer_sdl_number', ''),
+                data.get('employer_contact_details', ''),
+                data.get('training_provider_name', ''),
+                data.get('training_provider_sdl_number', ''),
+                data.get('training_provider_contact_details', ''),
+                data.get('training_provider_type', ''),
+                data.get('training_provider_province', ''),
+                data.get('learner_province', ''),
+                data.get('learner_local_district', ''),
+                data.get('learner_residential_area', ''),
+                data.get('learner_area_type', ''),
+                data.get('learner_physical_address_code', ''),
+                data.get('programme_funding_type', ''),
+                amount_spent,
+                data.get('key_dev_transformation', ''),
+                data.get('project_number', ''),
+                data.get('activity_number', ''),
+                data.get('app_sub_programme', ''),
                 data.get('learner_contact_number', ''), 
                 data.get('learner_email', ''),
+                data.get('learner_parent_contact', ''),
+                data.get('non_nqf_intervention_subfield_id', ''),
+                data.get('non_nqf_intervention_status_id', ''),
+                intervention_credit,
+                data.get('unit_standard_id', ''),
+                data.get('training_provider_code', ''),
+                data.get('training_provider_etqa_id', ''),
+                data.get('training_provider_postal_address', ''),
+                accreditation_start,
+                data.get('training_provider_province_code', ''),
+                data.get('training_provider_physical_address', ''),
+                data.get('learner_home_language', ''),
+                data.get('agreement_number', ''),
+                data.get('learner_last_school_emis', ''),
+                data.get('learner_last_school_year', ''),
+                data.get('learner_stats_area_code', ''),
+                data.get('additional_documents', ''),
                 project_id,
                 file_filename
             )
@@ -232,8 +302,167 @@ def add_beneficiary():
         print(f"Error adding beneficiary: {str(e)}")
         return jsonify({"error": f"Failed to add beneficiary: {str(e)}"}), 500
 
-# ===================== DISABLED BENEFICIARY EDIT/DELETE ===================== #
-# Routes for updating or deleting beneficiaries are removed intentionally
+# ADD BENEFICIARY EDIT AND DELETE ENDPOINTS
+@app.route('/beneficiaries/<int:id>', methods=['PUT'])
+def update_beneficiary(id):
+    try:
+        data = request.form.to_dict()
+        
+        # Handle file upload
+        uploaded_file = request.files.get('file')
+        file_filename = None
+        if uploaded_file:
+            ext = os.path.splitext(uploaded_file.filename)[1]
+            file_filename = f"{uuid.uuid4().hex}{ext}"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_filename)
+            uploaded_file.save(file_path)
+
+        def format_date(date_str):
+            if not date_str:
+                return None
+            try:
+                if 'T' in date_str:
+                    date_str = date_str.split('T')[0]
+                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%m-%d-%Y', '%d-%m-%Y'):
+                    try:
+                        return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
+                    except ValueError:
+                        continue
+                return date_str
+            except:
+                return None
+
+        # Format date fields
+        programme_start = format_date(data.get('programme_start_date'))
+        programme_completion = format_date(data.get('programme_completion_date'))
+        certificate_issue = format_date(data.get('certificate_issue_date'))
+        accreditation_start = format_date(data.get('training_provider_accreditation_start_date'))
+
+        # Handle numeric fields
+        def format_numeric(value):
+            if not value:
+                return None
+            try:
+                return float(value)
+            except:
+                return None
+
+        amount_spent = format_numeric(data.get('amount_spent_per_learner'))
+        intervention_credit = format_numeric(data.get('non_nqf_intervention_credit'))
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        if file_filename:
+            # Update with file
+            cur.execute(
+                '''
+                UPDATE beneficiaries SET
+                    learner_first_name=%s, learner_surname=%s, learner_initials=%s, learner_title=%s,
+                    learner_id_number=%s, learning_programme_type=%s, programme_start_date=%s, 
+                    programme_completion_date=%s, certificate_issue_date=%s, ofo_code=%s,
+                    nqf_level=%s, programme_description=%s, employer_name=%s, employer_sdl_number=%s,
+                    employer_contact_details=%s, training_provider_name=%s, training_provider_sdl_number=%s,
+                    training_provider_contact_details=%s, training_provider_type=%s, training_provider_province=%s,
+                    learner_province=%s, learner_local_district=%s, learner_residential_area=%s, learner_area_type=%s,
+                    learner_physical_address_code=%s, programme_funding_type=%s, amount_spent_per_learner=%s,
+                    key_dev_transformation=%s, project_number=%s, activity_number=%s, app_sub_programme=%s,
+                    learner_contact_number=%s, learner_email=%s, learner_parent_contact=%s, non_nqf_intervention_subfield_id=%s,
+                    non_nqf_intervention_status_id=%s, non_nqf_intervention_credit=%s, unit_standard_id=%s,
+                    training_provider_code=%s, training_provider_etqa_id=%s, training_provider_postal_address=%s,
+                    training_provider_accreditation_start_date=%s, training_provider_province_code=%s,
+                    training_provider_physical_address=%s, learner_home_language=%s, agreement_number=%s,
+                    learner_last_school_emis=%s, learner_last_school_year=%s, learner_stats_area_code=%s,
+                    additional_documents=%s, uploaded_file=%s
+                WHERE id=%s
+                ''',
+                (
+                    data.get('learner_first_name', ''), data.get('learner_surname', ''), data.get('learner_initials', ''),
+                    data.get('learner_title', ''), data.get('learner_id_number', ''), data.get('learning_programme_type', ''),
+                    programme_start, programme_completion, certificate_issue, data.get('ofo_code', ''),
+                    data.get('nqf_level', ''), data.get('programme_description', ''), data.get('employer_name', ''),
+                    data.get('employer_sdl_number', ''), data.get('employer_contact_details', ''), data.get('training_provider_name', ''),
+                    data.get('training_provider_sdl_number', ''), data.get('training_provider_contact_details', ''), data.get('training_provider_type', ''),
+                    data.get('training_provider_province', ''), data.get('learner_province', ''), data.get('learner_local_district', ''),
+                    data.get('learner_residential_area', ''), data.get('learner_area_type', ''), data.get('learner_physical_address_code', ''),
+                    data.get('programme_funding_type', ''), amount_spent, data.get('key_dev_transformation', ''),
+                    data.get('project_number', ''), data.get('activity_number', ''), data.get('app_sub_programme', ''),
+                    data.get('learner_contact_number', ''), data.get('learner_email', ''), data.get('learner_parent_contact', ''),
+                    data.get('non_nqf_intervention_subfield_id', ''), data.get('non_nqf_intervention_status_id', ''), intervention_credit,
+                    data.get('unit_standard_id', ''), data.get('training_provider_code', ''), data.get('training_provider_etqa_id', ''),
+                    data.get('training_provider_postal_address', ''), accreditation_start, data.get('training_provider_province_code', ''),
+                    data.get('training_provider_physical_address', ''), data.get('learner_home_language', ''), data.get('agreement_number', ''),
+                    data.get('learner_last_school_emis', ''), data.get('learner_last_school_year', ''), data.get('learner_stats_area_code', ''),
+                    data.get('additional_documents', ''), file_filename, id
+                )
+            )
+        else:
+            # Update without changing file
+            cur.execute(
+                '''
+                UPDATE beneficiaries SET
+                    learner_first_name=%s, learner_surname=%s, learner_initials=%s, learner_title=%s,
+                    learner_id_number=%s, learning_programme_type=%s, programme_start_date=%s, 
+                    programme_completion_date=%s, certificate_issue_date=%s, ofo_code=%s,
+                    nqf_level=%s, programme_description=%s, employer_name=%s, employer_sdl_number=%s,
+                    employer_contact_details=%s, training_provider_name=%s, training_provider_sdl_number=%s,
+                    training_provider_contact_details=%s, training_provider_type=%s, training_provider_province=%s,
+                    learner_province=%s, learner_local_district=%s, learner_residential_area=%s, learner_area_type=%s,
+                    learner_physical_address_code=%s, programme_funding_type=%s, amount_spent_per_learner=%s,
+                    key_dev_transformation=%s, project_number=%s, activity_number=%s, app_sub_programme=%s,
+                    learner_contact_number=%s, learner_email=%s, learner_parent_contact=%s, non_nqf_intervention_subfield_id=%s,
+                    non_nqf_intervention_status_id=%s, non_nqf_intervention_credit=%s, unit_standard_id=%s,
+                    training_provider_code=%s, training_provider_etqa_id=%s, training_provider_postal_address=%s,
+                    training_provider_accreditation_start_date=%s, training_provider_province_code=%s,
+                    training_provider_physical_address=%s, learner_home_language=%s, agreement_number=%s,
+                    learner_last_school_emis=%s, learner_last_school_year=%s, learner_stats_area_code=%s,
+                    additional_documents=%s
+                WHERE id=%s
+                ''',
+                (
+                    data.get('learner_first_name', ''), data.get('learner_surname', ''), data.get('learner_initials', ''),
+                    data.get('learner_title', ''), data.get('learner_id_number', ''), data.get('learning_programme_type', ''),
+                    programme_start, programme_completion, certificate_issue, data.get('ofo_code', ''),
+                    data.get('nqf_level', ''), data.get('programme_description', ''), data.get('employer_name', ''),
+                    data.get('employer_sdl_number', ''), data.get('employer_contact_details', ''), data.get('training_provider_name', ''),
+                    data.get('training_provider_sdl_number', ''), data.get('training_provider_contact_details', ''), data.get('training_provider_type', ''),
+                    data.get('training_provider_province', ''), data.get('learner_province', ''), data.get('learner_local_district', ''),
+                    data.get('learner_residential_area', ''), data.get('learner_area_type', ''), data.get('learner_physical_address_code', ''),
+                    data.get('programme_funding_type', ''), amount_spent, data.get('key_dev_transformation', ''),
+                    data.get('project_number', ''), data.get('activity_number', ''), data.get('app_sub_programme', ''),
+                    data.get('learner_contact_number', ''), data.get('learner_email', ''), data.get('learner_parent_contact', ''),
+                    data.get('non_nqf_intervention_subfield_id', ''), data.get('non_nqf_intervention_status_id', ''), intervention_credit,
+                    data.get('unit_standard_id', ''), data.get('training_provider_code', ''), data.get('training_provider_etqa_id', ''),
+                    data.get('training_provider_postal_address', ''), accreditation_start, data.get('training_provider_province_code', ''),
+                    data.get('training_provider_physical_address', ''), data.get('learner_home_language', ''), data.get('agreement_number', ''),
+                    data.get('learner_last_school_emis', ''), data.get('learner_last_school_year', ''), data.get('learner_stats_area_code', ''),
+                    data.get('additional_documents', ''), id
+                )
+            )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"message": "Beneficiary updated successfully ✅"})
+
+    except Exception as e:
+        print(f"Error updating beneficiary: {str(e)}")
+        return jsonify({"error": f"Failed to update beneficiary: {str(e)}"}), 500
+
+@app.route('/beneficiaries/<int:id>', methods=['DELETE'])
+def delete_beneficiary(id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('DELETE FROM beneficiaries WHERE id=%s;', (id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"message": "Beneficiary deleted successfully 🗑️"})
+    except Exception as e:
+        print(f"Error deleting beneficiary: {str(e)}")
+        return jsonify({"error": f"Failed to delete beneficiary: {str(e)}"}), 500
 
 # ===================== SERVE UPLOADED FILES ===================== #
 
