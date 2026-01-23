@@ -1,14 +1,37 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from db import get_db_connection
+import os
+from werkzeug.utils import secure_filename
 from datetime import datetime
+import json
 
 app = Flask(__name__)
-CORS(app)
 
+# Configure CORS properly
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Accept"],
+        "supports_credentials": False
+    }
+})
 
-@app.route("/api/projects", methods=["GET"])
+# Configure upload folder (if you need images later)
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route("/api/projects", methods=["GET", "OPTIONS"])
 def get_projects():
+    if request.method == "OPTIONS":
+        return '', 200
+        
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -27,44 +50,74 @@ def get_projects():
         for r in rows:
             projects.append({
                 "id": r[0],
-                "title": r[1],
+                "title": r[1],  # Changed from project_name to title
                 "description": r[2],
-                "start_date": r[3].strftime("%Y-%m-%d"),
-                "end_date": r[4].strftime("%Y-%m-%d"),
+                "start_date": r[3].strftime("%Y-%m-%d") if r[3] else "",
+                "end_date": r[4].strftime("%Y-%m-%d") if r[4] else "",
                 "participants": r[5],
-                "accreditors": r[6]
+                "accreditors": r[6] if r[6] else []  # Array field
             })
 
         return jsonify(projects)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/api/projects", methods=["POST"])
+@app.route("/api/projects", methods=["POST", "OPTIONS"])
 def create_project():
-    data = request.get_json()
-
-    required = ["title", "description", "start_date", "end_date", "participants", "accreditors"]
-    for field in required:
-        if field not in data:
-            return jsonify({"error": f"Missing field: {field}"}), 400
-
+    if request.method == "OPTIONS":
+        return '', 200
+        
     try:
+        # First check content type
+        content_type = request.content_type or ''
+        
+        if content_type.startswith('application/json'):
+            data = request.get_json()
+            
+            # Extract fields - match database column names
+            title = data.get('title')
+            description = data.get('description')
+            start_date = data.get('start_date')
+            end_date = data.get('end_date')
+            participants = data.get('participants')
+            accreditors = data.get('accreditors', [])  # Default to empty array
+            
+            # Validate required fields
+            if not all([title, description, start_date, end_date, participants]):
+                return jsonify({"error": "Missing required fields"}), 400
+                
+        elif 'multipart/form-data' in content_type:
+            # If you're sending form data (with files)
+            title = request.form.get('title')
+            description = request.form.get('description')
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date')
+            participants = request.form.get('participants')
+            accreditors_str = request.form.get('accreditors', '[]')
+            
+            # Parse accreditors if it's a JSON string
+            try:
+                accreditors = json.loads(accreditors_str) if accreditors_str else []
+            except:
+                accreditors = []
+        else:
+            return jsonify({"error": "Unsupported content type"}), 415
+
         conn = get_db_connection()
         cur = conn.cursor()
 
         cur.execute("""
-            INSERT INTO projects
+            INSERT INTO projects 
             (title, description, start_date, end_date, participants, accreditors)
             VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id;
         """, (
-            data["title"],
-            data["description"],
-            data["start_date"],
-            data["end_date"],
-            data["participants"],
-            data["accreditors"]
+            title,
+            description,
+            start_date,
+            end_date,
+            int(participants),
+            accreditors  # This should be an array
         ))
 
         project_id = cur.fetchone()[0]
@@ -72,112 +125,116 @@ def create_project():
         cur.close()
         conn.close()
 
-        return jsonify({"id": project_id}), 201
+        return jsonify({
+            "id": project_id,
+            "title": title,
+            "message": "Project created successfully"
+        }), 201
     except Exception as e:
+        print(f"Error creating project: {e}")  # For debugging
         return jsonify({"error": str(e)}), 500
 
-
-# ===================== BENEFICIARIES ===================== #
-
-@app.route("/api/beneficiaries", methods=["GET"])
-def get_beneficiaries():
+@app.route("/api/projects/<int:project_id>", methods=["PUT", "OPTIONS"])
+def update_project(project_id):
+    if request.method == "OPTIONS":
+        return '', 200
+        
     try:
+        content_type = request.content_type or ''
+        
+        if content_type.startswith('application/json'):
+            data = request.get_json()
+            title = data.get('title')
+            description = data.get('description')
+            start_date = data.get('start_date')
+            end_date = data.get('end_date')
+            participants = data.get('participants')
+            accreditors = data.get('accreditors')
+            
+        elif 'multipart/form-data' in content_type:
+            title = request.form.get('title')
+            description = request.form.get('description')
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date')
+            participants = request.form.get('participants')
+            accreditors_str = request.form.get('accreditors')
+            
+            if accreditors_str:
+                try:
+                    accreditors = json.loads(accreditors_str)
+                except:
+                    accreditors = None
+            else:
+                accreditors = None
+        else:
+            return jsonify({"error": "Unsupported content type"}), 415
+
         conn = get_db_connection()
         cur = conn.cursor()
 
-        cur.execute("""
-            SELECT
-              b.id,
-              b.project_id,
-              b.learner_first_names,
-              b.learner_surname,
-              b.learner_id_number,
-              b.learning_programme_type,
-              b.programme_start_date,
-              b.programme_completion_date,
-              p.title
-            FROM beneficiaries b
-            JOIN projects p ON b.project_id = p.id
-            ORDER BY b.id DESC;
-        """)
+        # Build dynamic update query
+        update_fields = []
+        values = []
+        
+        if title is not None:
+            update_fields.append("title = %s")
+            values.append(title)
+        if description is not None:
+            update_fields.append("description = %s")
+            values.append(description)
+        if start_date is not None:
+            update_fields.append("start_date = %s")
+            values.append(start_date)
+        if end_date is not None:
+            update_fields.append("end_date = %s")
+            values.append(end_date)
+        if participants is not None:
+            update_fields.append("participants = %s")
+            values.append(int(participants))
+        if accreditors is not None:
+            update_fields.append("accreditors = %s")
+            values.append(accreditors)
 
-        rows = cur.fetchall()
+        values.append(project_id)
+        
+        if update_fields:
+            query = f"""
+                UPDATE projects
+                SET {', '.join(update_fields)}
+                WHERE id = %s
+                RETURNING id;
+            """
+            cur.execute(query, values)
+            conn.commit()
+
         cur.close()
         conn.close()
 
-        beneficiaries = []
-        for r in rows:
-            beneficiaries.append({
-                "id": r[0],
-                "project_id": r[1],
-                "learner_first_names": r[2],
-                "learner_surname": r[3],
-                "learner_id_number": r[4],
-                "learning_programme_type": r[5],
-                "programme_start_date": r[6].strftime("%Y-%m-%d") if r[6] else None,
-                "programme_completion_date": r[7].strftime("%Y-%m-%d") if r[7] else None,
-                "project_title": r[8]
-            })
-
-        return jsonify(beneficiaries)
+        return jsonify({"message": "Project updated successfully"}), 200
     except Exception as e:
+        print(f"Error updating project: {e}")
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/api/beneficiaries", methods=["POST"])
-def create_beneficiary():
-    data = request.get_json()
-
-    required = [
-        "project_id",
-        "learner_first_names",
-        "learner_surname",
-        "learner_id_number"
-    ]
-
-    for field in required:
-        if field not in data:
-            return jsonify({"error": f"Missing field: {field}"}), 400
-
+@app.route("/api/projects/<int:project_id>", methods=["DELETE", "OPTIONS"])
+def delete_project(project_id):
+    if request.method == "OPTIONS":
+        return '', 200
+        
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        cur.execute("""
-            INSERT INTO beneficiaries
-            (project_id, learner_first_names, learner_surname, learner_id_number,
-             learning_programme_type, programme_start_date, programme_completion_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (
-            data["project_id"],
-            data["learner_first_names"],
-            data["learner_surname"],
-            data["learner_id_number"],
-            data.get("learning_programme_type"),
-            data.get("programme_start_date"),
-            data.get("programme_completion_date")
-        ))
-
-        beneficiary_id = cur.fetchone()[0]
+        cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({"id": beneficiary_id}), 201
+        return jsonify({"message": "Project deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# ===================== ROOT ===================== #
-
-@app.route("/")
-def home():
-    return jsonify({
-        "message": "Beneficiary Management System API",
-        "version": "1.0"
-    })
-
-
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    # Create uploads directory if it doesn't exist
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
+    app.run(debug=True, port=5050, host='0.0.0.0')
