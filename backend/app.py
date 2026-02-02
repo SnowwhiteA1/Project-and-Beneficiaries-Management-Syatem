@@ -3,6 +3,8 @@ from flask_cors import CORS
 import psycopg2
 import traceback
 from datetime import datetime
+import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -13,10 +15,22 @@ CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"]}})
 DB_CONFIG = {
     'host': 'localhost',
     'database': 'jumpstart_database',
-    'user': 'postgres',  # Update if different
-    'password': 'admin123',  # Update to your PostgreSQL password
+    'user': 'postgres',
+    'password': 'admin123',
     'port': 5432
 }
+
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Create upload folder if it doesn't exist
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db_connection():
     """Create a database connection"""
@@ -127,16 +141,51 @@ def get_project(project_id):
 
 @app.route("/api/projects", methods=["POST", "OPTIONS"])
 def create_project():
-    """Create a new project"""
+    """Create a new project with optional image upload"""
     if request.method == "OPTIONS":
         return '', 200
     try:
-        data = request.json
+        # Check if request has form data
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            name = request.form.get('name')
+            project_type = request.form.get('project_type')
+            description = request.form.get('description', '')
+            funder = request.form.get('funder', '')
+            accreditor = request.form.get('accreditor', '')
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date')
+            status = request.form.get('status', 'Active')
+            
+            # Handle file upload
+            project_image_url = ''
+            if 'project_image' in request.files:
+                file = request.files['project_image']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    # Create unique filename to avoid collisions
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    # In production, you might want to upload to cloud storage
+                    # For local development, serve from uploads folder
+                    project_image_url = f"http://localhost:5050/uploads/{filename}"
+        else:
+            # Handle JSON request (for backward compatibility)
+            data = request.json
+            name = data.get('name')
+            project_type = data.get('project_type')
+            description = data.get('description', '')
+            funder = data.get('funder', '')
+            accreditor = data.get('accreditor', '')
+            project_image_url = data.get('project_image_url', '')
+            start_date = data.get('start_date')
+            end_date = data.get('end_date')
+            status = data.get('status', 'Active')
+        
         # Validate required fields
-        required_fields = ['name', 'project_type']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({"error": f"Missing required field: {field}"}), 400
+        if not name or not project_type:
+            return jsonify({"error": "Missing required fields: name and project_type"}), 400
         
         conn = get_db_connection()
         if not conn:
@@ -144,18 +193,20 @@ def create_project():
         
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO projects (name, project_type, description, funder, accreditor, project_image_url, start_date, end_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO projects (name, project_type, description, funder, accreditor, project_image_url, 
+                   start_date, end_date, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
         """, (
-            data['name'].strip(),
-            data['project_type'].strip(),
-            data.get('description', ''),
-            data.get('funder', ''),
-            data.get('accreditor', ''),
-            data.get('project_image_url', ''),
-            data.get('start_date'),
-            data.get('end_date')
+            name.strip(),
+            project_type.strip(),
+            description.strip(),
+            funder.strip(),
+            accreditor.strip(),
+            project_image_url,
+            start_date,
+            end_date,
+            status
         ))
         
         project_id = cur.fetchone()[0]
@@ -172,30 +223,62 @@ def create_project():
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT", "OPTIONS"])
 def update_project(project_id):
-    """Update a project"""
+    """Update a project with optional image upload"""
     if request.method == "OPTIONS":
         return '', 200
     try:
-        data = request.json
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
         cur = conn.cursor()
-        cur.execute("SELECT id FROM projects WHERE id = %s", (project_id,))
-        if not cur.fetchone():
+        cur.execute("SELECT id, project_image_url FROM projects WHERE id = %s", (project_id,))
+        existing_project = cur.fetchone()
+        
+        if not existing_project:
             cur.close()
             conn.close()
             return jsonify({"error": "Project not found"}), 404
         
+        # Check if request has form data
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            data = request.form
+            # Handle file upload
+            project_image_url = existing_project[1]  # Keep existing image URL
+            if 'project_image' in request.files:
+                file = request.files['project_image']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    project_image_url = f"http://localhost:5050/uploads/{filename}"
+        else:
+            data = request.json
+            project_image_url = data.get('project_image_url', existing_project[1])
+        
         # Build update query
         update_fields = []
         values = []
-        allowed_fields = ['name', 'project_type', 'description', 'funder', 'accreditor', 'project_image_url', 'start_date', 'end_date', 'status']
-        for field in allowed_fields:
-            if field in data:
+        
+        # List of allowed fields
+        allowed_fields = {
+            'name': data.get('name'),
+            'project_type': data.get('project_type'),
+            'description': data.get('description'),
+            'funder': data.get('funder'),
+            'accreditor': data.get('accreditor'),
+            'project_image_url': project_image_url,
+            'start_date': data.get('start_date'),
+            'end_date': data.get('end_date'),
+            'status': data.get('status')
+        }
+        
+        for field, value in allowed_fields.items():
+            if value is not None:
                 update_fields.append(f"{field} = %s")
-                values.append(data[field])
+                values.append(value.strip() if isinstance(value, str) else value)
         
         if not update_fields:
             cur.close()
@@ -258,6 +341,11 @@ def health_check():
             return jsonify({"status": "unhealthy", "database": "disconnected"}), 500
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
+# ================= STATIC FILES FOR UPLOADS =================
+@app.route('/uploads/<filename>')
+def serve_uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # ================= RUN SERVER =================
 if __name__ == "__main__":

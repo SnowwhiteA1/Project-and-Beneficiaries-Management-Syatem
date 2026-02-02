@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -20,13 +20,15 @@ import {
   InputLabel,
   Select,
   Chip,
-  Checkbox,
-  ListItemText,
   CircularProgress,
-  Alert
+  Alert,
+  CardMedia,
+  Input,
+  DialogContentText
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import axios from "axios";
 
 const companyLogo = "/logo.jpeg";
@@ -48,6 +50,8 @@ const Dashboard = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editProjectId, setEditProjectId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [openConfirmation, setOpenConfirmation] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Form fields matching backend structure
   const [name, setName] = useState("");
@@ -55,7 +59,8 @@ const Dashboard = () => {
   const [description, setDescription] = useState("");
   const [funder, setFunder] = useState("");
   const [accreditor, setAccreditor] = useState("");
-  const [projectImageUrl, setProjectImageUrl] = useState("");
+  const [projectImageFile, setProjectImageFile] = useState(null);
+  const [projectImagePreview, setProjectImagePreview] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState("Active");
@@ -88,7 +93,8 @@ const Dashboard = () => {
     setDescription("");
     setFunder("");
     setAccreditor("");
-    setProjectImageUrl("");
+    setProjectImageFile(null);
+    setProjectImagePreview("");
     setStartDate("");
     setEndDate("");
     setStatus("Active");
@@ -106,32 +112,73 @@ const Dashboard = () => {
     resetForm();
   };
 
+  const handleImageUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setProjectImageFile(file);
+      // Create a preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setProjectImagePreview(previewUrl);
+    }
+  };
+
+  const prepareFormData = () => {
+    const formData = new FormData();
+    formData.append('name', name.trim());
+    formData.append('project_type', projectType.trim());
+    formData.append('description', description.trim());
+    formData.append('funder', funder.trim());
+    formData.append('accreditor', accreditor.trim());
+    formData.append('status', status);
+    
+    if (startDate) formData.append('start_date', startDate);
+    if (endDate) formData.append('end_date', endDate);
+    
+    // Append image file if selected
+    if (projectImageFile) {
+      formData.append('project_image', projectImageFile);
+    } else if (projectImagePreview && isEditMode) {
+      // If editing and there's a preview (but no new file), keep the existing URL
+      // You might want to handle this differently based on your backend
+    }
+    
+    return formData;
+  };
+
   const handleSaveProject = async () => {
+    // Open confirmation dialog instead of saving immediately
+    setOpenConfirmation(true);
+  };
+
+  const confirmSaveProject = async () => {
+    setOpenConfirmation(false);
+    
     // Backend requires name and project_type
     if (!name || !projectType) {
       alert("Please fill in Project Name and Project Type (required)");
       return;
     }
 
-    const payload = {
-      name: name.trim(),
-      project_type: projectType.trim(),
-      description: description.trim(),
-      funder: funder.trim(),
-      accreditor: accreditor.trim(),
-      project_image_url: projectImageUrl.trim(),
-      start_date: startDate || null,
-      end_date: endDate || null,
-      status: status
-    };
-
     try {
       setSaving(true);
+      const formData = prepareFormData();
+      
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      };
+
       if (isEditMode) {
-        await axios.put(`${API_URL}/${editProjectId}`, payload);
+        await axios.put(`${API_URL}/${editProjectId}`, formData, config);
       } else {
-        await axios.post(API_URL, payload);
+        await axios.post(API_URL, formData, config);
       }
+      
       handleClose();
       fetchProjects();
       alert(`Project ${isEditMode ? "updated" : "created"} successfully!`);
@@ -163,7 +210,7 @@ const Dashboard = () => {
     setDescription(p.description || "");
     setFunder(p.funder || "");
     setAccreditor(p.accreditor || "");
-    setProjectImageUrl(p.project_image_url || "");
+    setProjectImagePreview(p.project_image_url || "");
     setStartDate(p.start_date || "");
     setEndDate(p.end_date || "");
     setStatus(p.status || "Active");
@@ -227,9 +274,18 @@ const Dashboard = () => {
         {projects.map((p) => (
           <Grid item xs={12} sm={6} md={4} key={p.id}>
             <Card sx={{ cursor: "pointer", position: "relative", height: "100%" }}>
-              <IconButton sx={{ position: "absolute", right: 8, top: 8 }} onClick={(e) => handleMenuClick(e, p)}>
+              <IconButton sx={{ position: "absolute", right: 8, top: 8, zIndex: 1 }} onClick={(e) => handleMenuClick(e, p)}>
                 <MoreVertIcon />
               </IconButton>
+              {p.project_image_url && (
+                <CardMedia
+                  component="img"
+                  height="140"
+                  image={p.project_image_url}
+                  alt={p.name}
+                  sx={{ objectFit: 'cover' }}
+                />
+              )}
               <CardContent>
                 <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>{p.name}</Typography>
                 <Chip label={p.project_type} size="small" color="primary" sx={{ mb: 1 }} />
@@ -320,7 +376,49 @@ const Dashboard = () => {
               </FormControl>
             </Box>
 
-            <TextField label="Image URL" fullWidth value={projectImageUrl} onChange={(e) => setProjectImageUrl(e.target.value)} size="small" placeholder="https://example.com/image.jpg" />
+            {/* Image Upload Section */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Project Image</Typography>
+              <Input
+                type="file"
+                inputRef={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                accept="image/*"
+              />
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<CloudUploadIcon />}
+                onClick={handleImageUploadClick}
+                sx={{ mb: 2 }}
+              >
+                {projectImageFile ? 'Change Image' : 'Upload Image from Gallery'}
+              </Button>
+              
+              {projectImagePreview && (
+                <Box sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="caption" display="block" gutterBottom>
+                    Selected Image Preview:
+                  </Typography>
+                  <Box
+                    component="img"
+                    src={projectImagePreview}
+                    alt="Preview"
+                    sx={{
+                      maxWidth: '100%',
+                      maxHeight: 200,
+                      objectFit: 'contain',
+                      borderRadius: 1,
+                      border: '1px solid #ddd'
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                    {projectImageFile?.name}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
             
             <FormControl fullWidth size="small">
               <InputLabel>Status</InputLabel>
@@ -343,6 +441,36 @@ const Dashboard = () => {
           <Button onClick={handleClose} disabled={saving}>Cancel</Button>
           <Button onClick={handleSaveProject} variant="contained" color="warning" disabled={saving}>
             {saving ? "Saving..." : isEditMode ? "Update Project" : "Create Project"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={openConfirmation}
+        onClose={() => setOpenConfirmation(false)}
+        aria-labelledby="confirmation-dialog-title"
+      >
+        <DialogTitle id="confirmation-dialog-title">
+          Confirm Project {isEditMode ? "Update" : "Creation"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to {isEditMode ? "update" : "create"} this project?
+            <br />
+            <strong>Project Name:</strong> {name}
+            <br />
+            <strong>Project Type:</strong> {projectType}
+            <br />
+            <strong>Status:</strong> {status}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenConfirmation(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmSaveProject} variant="contained" color="warning" autoFocus>
+            Yes, {isEditMode ? "Update" : "Create"} Project
           </Button>
         </DialogActions>
       </Dialog>
