@@ -24,7 +24,9 @@ import {
   InputLabel,
   Select,
   Checkbox,
-  FormControlLabel
+  FormControlLabel,
+  Chip,
+  FormHelperText
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
@@ -36,7 +38,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_BASE = "http://127.0.0.1:5050";
+const API_BASE = "http://localhost:5050";
 
 const Beneficiaries = () => {
   const { projectId } = useParams();
@@ -58,42 +60,35 @@ const Beneficiaries = () => {
     severity: "success",
   });
 
-  // Simplified form with only essential fields
+  // Form state with ALL fields the backend expects
   const [formData, setFormData] = useState({
-    // Required fields
+    // Personal Information (Required)
     first_name: "",
     last_name: "",
     id_number: "",
     
-    // Basic personal info
+    // Personal Details
     gender: "",
     age: "",
     race: "",
     mobile_phone: "",
     email: "",
-    
-    // Address info
     residential_area: "",
     learner_province: "",
     learner_municipality: "",
     
-    // Checkboxes with default values
+    // Checkboxes
     disability: false,
     youth: false,
     non_rsa_citizen: false,
     seta_funded: false,
     
-    // Default values for other required fields
+    // ALL other fields from database table
     initials: "",
-    title: "",
-    guardian_contact: "",
-    urban_rural: "",
-    physical_address_code: "",
-    stats_area_code: "",
-    home_language: "",
-    learning_programme_type: "",
+    home_language: "English",
+    learning_programme_type: "Training",
     ofo_code: "",
-    nqf_level: 0,
+    nqf_level: "",
     qualification_description: "",
     employer_name: "",
     employer_sdl_number: "",
@@ -107,7 +102,7 @@ const Beneficiaries = () => {
     training_provider_etqa_id: "",
     training_provider_postal_address: "",
     training_provider_physical_address: "",
-    amount_spent_per_learner: 0,
+    amount_spent_per_learner: "0",
     learnership_id: "",
     qualification_id: "",
     non_nqf_subfield_id: "",
@@ -116,7 +111,55 @@ const Beneficiaries = () => {
     unit_standard_id: "",
     agreement_number: "",
     last_school_emis: "",
-    last_school_year: 0
+    last_school_year: "",
+    
+    // Fields from database that are in backend mapping
+    disability_type: "",
+    area_type: "",
+    physical_address_line1: "",
+    physical_address_line2: "",
+    physical_address_code: "",
+    postal_address_line1: "",
+    postal_address_line2: "",
+    postal_code: "",
+    programme_start_date: new Date().toISOString().split('T')[0],
+    programme_completion_date: null,
+    certificate_issue_date: null,
+    training_provider_accreditation_start_date: null,
+    training_provider_province_code: "",
+    parent_guardian_mobile: "",
+    parent_guardian_email: "",
+    project_number: "",
+    activity_number: "",
+    app_sub_programme: "",
+    black_designated_groups: "0",
+    black_females: "0",
+    black_males: "0",
+    coloured_females: "0",
+    coloured_males: "0",
+    indian_females: "0",
+    indian_males: "0",
+    white_females: "0",
+    white_males: "0",
+    disabled_females: "0",
+    disabled_males: "0",
+    youth_females: "0",
+    youth_males: "0",
+    non_rsa_citizen_females: "0",
+    non_rsa_citizen_males: "0",
+    valid_id_number_length: true,
+    valid_age_for_youth: true,
+    correctly_reported_youth: true,
+    correctly_reported_gender: true,
+    correctly_reported_race: true,
+    skills: "",
+    employment_status: "",
+    current_employer: "",
+    monthly_income: "0",
+    programme_outcome: "",
+    notes: "",
+    validation_errors: "",
+    beneficiary_status: "Current"
   });
 
   useEffect(() => {
@@ -130,10 +173,10 @@ const Beneficiaries = () => {
       // Fetch project details
       const projectRes = await axios.get(`${API_BASE}/api/projects/${projectId}`);
       if (projectRes.data) {
-        setProjectTitle(projectRes.data.title || `Project #${projectId}`);
+        setProjectTitle(projectRes.data.name || `Project #${projectId}`);
       }
       
-      // Fetch beneficiaries
+      // Fetch beneficiaries for this project
       const beneficiariesRes = await axios.get(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`
       );
@@ -154,16 +197,22 @@ const Beneficiaries = () => {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    // Handle different input types
     if (type === 'checkbox') {
       setFormData({
         ...formData,
         [name]: checked
       });
-    } else if (type === 'number') {
+    } else if (name === 'age' || name === 'nqf_level' || name === 'last_school_year') {
+      // Handle numeric fields
       setFormData({
         ...formData,
-        [name]: value === '' ? 0 : parseFloat(value)
+        [name]: value === '' ? '' : value
+      });
+    } else if (name === 'amount_spent_per_learner' || name === 'monthly_income') {
+      // Handle decimal fields
+      setFormData({
+        ...formData,
+        [name]: value === '' ? '0' : value
       });
     } else {
       setFormData({
@@ -174,6 +223,8 @@ const Beneficiaries = () => {
   };
 
   const resetForm = () => {
+    const today = new Date().toISOString().split('T')[0];
+    
     setFormData({
       first_name: "",
       last_name: "",
@@ -191,15 +242,10 @@ const Beneficiaries = () => {
       non_rsa_citizen: false,
       seta_funded: false,
       initials: "",
-      title: "",
-      guardian_contact: "",
-      urban_rural: "",
-      physical_address_code: "",
-      stats_area_code: "",
-      home_language: "",
-      learning_programme_type: "",
+      home_language: "English",
+      learning_programme_type: "Training",
       ofo_code: "",
-      nqf_level: 0,
+      nqf_level: "",
       qualification_description: "",
       employer_name: "",
       employer_sdl_number: "",
@@ -213,7 +259,7 @@ const Beneficiaries = () => {
       training_provider_etqa_id: "",
       training_provider_postal_address: "",
       training_provider_physical_address: "",
-      amount_spent_per_learner: 0,
+      amount_spent_per_learner: "0",
       learnership_id: "",
       qualification_id: "",
       non_nqf_subfield_id: "",
@@ -222,61 +268,255 @@ const Beneficiaries = () => {
       unit_standard_id: "",
       agreement_number: "",
       last_school_emis: "",
-      last_school_year: 0
+      last_school_year: "",
+      disability_type: "",
+      area_type: "",
+      physical_address_line1: "",
+      physical_address_line2: "",
+      physical_address_code: "",
+      postal_address_line1: "",
+      postal_address_line2: "",
+      postal_code: "",
+      programme_start_date: today,
+      programme_completion_date: null,
+      certificate_issue_date: null,
+      training_provider_accreditation_start_date: null,
+      training_provider_province_code: "",
+      parent_guardian_mobile: "",
+      parent_guardian_email: "",
+      project_number: "",
+      activity_number: "",
+      app_sub_programme: "",
+      black_designated_groups: "0",
+      black_females: "0",
+      black_males: "0",
+      coloured_females: "0",
+      coloured_males: "0",
+      indian_females: "0",
+      indian_males: "0",
+      white_females: "0",
+      white_males: "0",
+      disabled_females: "0",
+      disabled_males: "0",
+      youth_females: "0",
+      youth_males: "0",
+      non_rsa_citizen_females: "0",
+      non_rsa_citizen_males: "0",
+      valid_id_number_length: true,
+      valid_age_for_youth: true,
+      correctly_reported_youth: true,
+      correctly_reported_gender: true,
+      correctly_reported_race: true,
+      skills: "",
+      employment_status: "",
+      current_employer: "",
+      monthly_income: "0",
+      programme_outcome: "",
+      notes: "",
+      validation_errors: "",
+      beneficiary_status: "Current"
     });
     setSelectedBeneficiary(null);
     setIsEdit(false);
   };
-
   const handleAddBeneficiary = async () => {
+  try {
+    // Validate required fields
+    if (!formData.first_name.trim()) {
+      showSnackbar("First name is required", "error");
+      return;
+    }
+    if (!formData.last_name.trim()) {
+      showSnackbar("Last name is required", "error");
+      return;
+    }
+    if (!formData.id_number.trim()) {
+      showSnackbar("ID number is required", "error");
+      return;
+    }
+
+    // Prepare COMPLETE data for backend - ALL fields as strings
+    const dataToSend = {
+      // Personal Information
+      first_name: formData.first_name.trim(),
+      last_name: formData.last_name.trim(),
+      id_number: formData.id_number.trim(),
+      
+      // Personal Details - send empty strings instead of null
+      gender: formData.gender || "",
+      age: formData.age ? parseInt(formData.age) : null,
+      race: formData.race || "",
+      mobile_phone: formData.mobile_phone || "",
+      email: formData.email || "",
+      residential_area: formData.residential_area || "",
+      learner_province: formData.learner_province || "",
+      learner_municipality: formData.learner_municipality || "",
+      
+      // Checkboxes
+      disability: Boolean(formData.disability),
+      youth: Boolean(formData.youth),
+      non_rsa_citizen: Boolean(formData.non_rsa_citizen),
+      seta_funded: Boolean(formData.seta_funded),
+      
+      // ALL other required fields - send empty strings
+      initials: formData.initials || "",
+      home_language: formData.home_language || "English",
+      learning_programme_type: formData.learning_programme_type || "Training",
+      ofo_code: formData.ofo_code || "",
+      nqf_level: formData.nqf_level || "",
+      qualification_description: formData.qualification_description || "",
+      employer_name: formData.employer_name || "",
+      employer_sdl_number: formData.employer_sdl_number || "",
+      employer_contact_details: formData.employer_contact_details || "",
+      training_provider_name: formData.training_provider_name || "",
+      training_provider_sdl_number: formData.training_provider_sdl_number || "",
+      training_provider_contact_details: formData.training_provider_contact_details || "",
+      training_provider_type: formData.training_provider_type || "",
+      training_provider_province: formData.training_provider_province || "",
+      training_provider_code: formData.training_provider_code || "",
+      training_provider_etqa_id: formData.training_provider_etqa_id || "",
+      training_provider_postal_address: formData.training_provider_postal_address || "",
+      training_provider_physical_address: formData.training_provider_physical_address || "",
+      amount_spent_per_learner: formData.amount_spent_per_learner ? parseFloat(formData.amount_spent_per_learner) : 0,
+      learnership_id: formData.learnership_id || "",
+      qualification_id: formData.qualification_id || "",
+      non_nqf_subfield_id: formData.non_nqf_subfield_id || "",
+      non_nqf_status_id: formData.non_nqf_status_id || "",
+      non_nqf_credit: formData.non_nqf_credit || "",
+      unit_standard_id: formData.unit_standard_id || "",
+      agreement_number: formData.agreement_number || "",
+      last_school_emis: formData.last_school_emis || "",
+      last_school_year: formData.last_school_year || "",
+      
+      // Additional database fields - send empty strings
+      disability_type: formData.disability_type || "",
+      area_type: formData.area_type || "",
+      physical_address_line1: formData.physical_address_line1 || "",
+      physical_address_line2: formData.physical_address_line2 || "",
+      physical_address_code: formData.physical_address_code || "",
+      postal_address_line1: formData.postal_address_line1 || "",
+      postal_address_line2: formData.postal_address_line2 || "",
+      postal_code: formData.postal_code || "",
+      programme_start_date: formData.programme_start_date || new Date().toISOString().split('T')[0],
+      programme_completion_date: formData.programme_completion_date || "",
+      certificate_issue_date: formData.certificate_issue_date || "",
+      training_provider_accreditation_start_date: formData.training_provider_accreditation_start_date || "",
+      training_provider_province_code: formData.training_provider_province_code || "",
+      parent_guardian_mobile: formData.parent_guardian_mobile || "",
+      parent_guardian_email: formData.parent_guardian_email || "",
+      project_number: formData.project_number || "",
+      activity_number: formData.activity_number || "",
+      app_sub_programme: formData.app_sub_programme || "",
+      black_designated_groups: parseInt(formData.black_designated_groups) || 0,
+      black_females: parseInt(formData.black_females) || 0,
+      black_males: parseInt(formData.black_males) || 0,
+      coloured_females: parseInt(formData.coloured_females) || 0,
+      coloured_males: parseInt(formData.coloured_males) || 0,
+      indian_females: parseInt(formData.indian_females) || 0,
+      indian_males: parseInt(formData.indian_males) || 0,
+      white_females: parseInt(formData.white_females) || 0,
+      white_males: parseInt(formData.white_males) || 0,
+      disabled_females: parseInt(formData.disabled_females) || 0,
+      disabled_males: parseInt(formData.disabled_males) || 0,
+      youth_females: parseInt(formData.youth_females) || 0,
+      youth_males: parseInt(formData.youth_males) || 0,
+      non_rsa_citizen_females: parseInt(formData.non_rsa_citizen_females) || 0,
+      non_rsa_citizen_males: parseInt(formData.non_rsa_citizen_males) || 0,
+      valid_id_number_length: Boolean(formData.valid_id_number_length),
+      valid_age_for_youth: Boolean(formData.valid_age_for_youth),
+      correctly_reported_youth: Boolean(formData.correctly_reported_youth),
+      correctly_reported_gender: Boolean(formData.correctly_reported_gender),
+      correctly_reported_race: Boolean(formData.correctly_reported_race),
+      skills: formData.skills || "",
+      employment_status: formData.employment_status || "",
+      current_employer: formData.current_employer || "",
+      monthly_income: formData.monthly_income ? parseFloat(formData.monthly_income) : 0,
+      programme_outcome: formData.programme_outcome || "",
+      notes: formData.notes || "",
+      validation_errors: formData.validation_errors || "",
+      beneficiary_status: formData.beneficiary_status || "Current"
+    };
+
+    // Fix: Ensure all text fields are strings, not null
+    Object.keys(dataToSend).forEach(key => {
+      if (dataToSend[key] === null && typeof dataToSend[key] === 'object') {
+        dataToSend[key] = "";
+      }
+    });
+
+    console.log("📤 Sending COMPLETE data to backend:", JSON.stringify(dataToSend, null, 2));
+    console.log("📤 Total fields being sent:", Object.keys(dataToSend).length);
+
+    const response = await axios.post(
+      `${API_BASE}/api/projects/${projectId}/beneficiaries`,
+      dataToSend,
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10 second timeout
+      }
+    );
+
+    console.log("✅ Beneficiary added successfully:", response.data);
+    showSnackbar("Beneficiary added successfully!");
+    setOpenDialog(false);
+    resetForm();
+    fetchProjectAndBeneficiaries();
+  } catch (err) {
+    console.error("❌ ERROR adding beneficiary:", err);
+    console.error("❌ Error response data:", err.response?.data);
+    console.error("❌ Error status:", err.response?.status);
+    console.error("❌ Error headers:", err.response?.headers);
+    
+    let errorMessage = "Failed to add beneficiary. ";
+    
+    if (err.response?.data?.error) {
+      errorMessage += `Server says: ${err.response.data.error}`;
+    } else if (err.message) {
+      errorMessage += `Error: ${err.message}`;
+    }
+    
+    showSnackbar(errorMessage, "error");
+  }
+};
+
+  // Keep the rest of your component the same (handleUpdateBeneficiary, handleDeleteBeneficiary, etc.)
+  const handleUpdateBeneficiary = async () => {
     try {
+      if (!selectedBeneficiary) return;
+
       // Validate required fields
       if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()) {
         showSnackbar("First name, last name, and ID number are required", "error");
         return;
       }
 
-      console.log("📝 Adding beneficiary with data:", formData);
-      
-      // Prepare data for backend
-      const dataToSend = {
-        ...formData,
+      const updateData = {
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        id_number: formData.id_number.trim(),
+        gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
-        nqf_level: formData.nqf_level ? parseInt(formData.nqf_level) : null,
-        last_school_year: formData.last_school_year ? parseInt(formData.last_school_year) : null,
-        amount_spent_per_learner: formData.amount_spent_per_learner ? parseFloat(formData.amount_spent_per_learner) : 0
+        race: formData.race || "",
+        mobile_phone: formData.mobile_phone || "",
+        email: formData.email || "",
+        residential_area: formData.residential_area || "",
+        learner_province: formData.learner_province || "",
+        learner_municipality: formData.learner_municipality || "",
+        disability: Boolean(formData.disability),
+        youth: Boolean(formData.youth),
+        non_rsa_citizen: Boolean(formData.non_rsa_citizen)
       };
 
-      const response = await axios.post(
-        `${API_BASE}/api/projects/${projectId}/beneficiaries`,
-        dataToSend
-      );
-
-      console.log("✅ Beneficiary added successfully:", response.data);
-      showSnackbar("Beneficiary added successfully!");
-      setOpenDialog(false);
-      resetForm();
-      fetchProjectAndBeneficiaries();
-    } catch (err) {
-      console.error("❌ Error adding beneficiary:", err);
-      console.error("Error response:", err.response?.data);
-      showSnackbar(
-        err.response?.data?.error || "Failed to add beneficiary. Check console for details.",
-        "error"
-      );
-    }
-  };
-
-  const handleUpdateBeneficiary = async () => {
-    try {
-      if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()) {
-        showSnackbar("First name, last name, and ID number are required", "error");
-        return;
-      }
-
-      await axios.put(
+      const response = await axios.put(
         `${API_BASE}/api/beneficiaries/${selectedBeneficiary.id}`,
-        formData
+        updateData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       showSnackbar("Beneficiary updated successfully!");
@@ -294,6 +534,8 @@ const Beneficiaries = () => {
 
   const handleDeleteBeneficiary = async () => {
     try {
+      if (!selectedBeneficiary) return;
+
       await axios.delete(
         `${API_BASE}/api/beneficiaries/${selectedBeneficiary.id}`
       );
@@ -321,60 +563,28 @@ const Beneficiaries = () => {
   };
 
   const handleEditClick = () => {
-    // Populate form with selected beneficiary data
-    const beneficiaryData = {
+    if (!selectedBeneficiary) return;
+
+    // For editing, we only need to populate the visible fields
+    setFormData(prev => ({
+      ...prev,
       first_name: selectedBeneficiary.first_name || "",
       last_name: selectedBeneficiary.last_name || "",
       id_number: selectedBeneficiary.id_number || "",
       gender: selectedBeneficiary.gender || "",
       age: selectedBeneficiary.age || "",
+      race: selectedBeneficiary.race || "",
       mobile_phone: selectedBeneficiary.mobile_phone || "",
       email: selectedBeneficiary.email || "",
       residential_area: selectedBeneficiary.residential_area || "",
-      // Add default values for other fields
-      race: selectedBeneficiary.race || "",
       learner_province: selectedBeneficiary.learner_province || "",
       learner_municipality: selectedBeneficiary.learner_municipality || "",
       disability: selectedBeneficiary.disability || false,
       youth: selectedBeneficiary.youth || false,
       non_rsa_citizen: selectedBeneficiary.non_rsa_citizen || false,
       seta_funded: selectedBeneficiary.seta_funded || false,
-      initials: selectedBeneficiary.initials || "",
-      title: selectedBeneficiary.title || "",
-      guardian_contact: selectedBeneficiary.guardian_contact || "",
-      urban_rural: selectedBeneficiary.urban_rural || "",
-      physical_address_code: selectedBeneficiary.physical_address_code || "",
-      stats_area_code: selectedBeneficiary.stats_area_code || "",
-      home_language: selectedBeneficiary.home_language || "",
-      learning_programme_type: selectedBeneficiary.learning_programme_type || "",
-      ofo_code: selectedBeneficiary.ofo_code || "",
-      nqf_level: selectedBeneficiary.nqf_level || 0,
-      qualification_description: selectedBeneficiary.qualification_description || "",
-      employer_name: selectedBeneficiary.employer_name || "",
-      employer_sdl_number: selectedBeneficiary.employer_sdl_number || "",
-      employer_contact_details: selectedBeneficiary.employer_contact_details || "",
-      training_provider_name: selectedBeneficiary.training_provider_name || "",
-      training_provider_sdl_number: selectedBeneficiary.training_provider_sdl_number || "",
-      training_provider_contact_details: selectedBeneficiary.training_provider_contact_details || "",
-      training_provider_type: selectedBeneficiary.training_provider_type || "",
-      training_provider_province: selectedBeneficiary.training_provider_province || "",
-      training_provider_code: selectedBeneficiary.training_provider_code || "",
-      training_provider_etqa_id: selectedBeneficiary.training_provider_etqa_id || "",
-      training_provider_postal_address: selectedBeneficiary.training_provider_postal_address || "",
-      training_provider_physical_address: selectedBeneficiary.training_provider_physical_address || "",
-      amount_spent_per_learner: selectedBeneficiary.amount_spent_per_learner || 0,
-      learnership_id: selectedBeneficiary.learnership_id || "",
-      qualification_id: selectedBeneficiary.qualification_id || "",
-      non_nqf_subfield_id: selectedBeneficiary.non_nqf_subfield_id || "",
-      non_nqf_status_id: selectedBeneficiary.non_nqf_status_id || "",
-      non_nqf_credit: selectedBeneficiary.non_nqf_credit || "",
-      unit_standard_id: selectedBeneficiary.unit_standard_id || "",
-      agreement_number: selectedBeneficiary.agreement_number || "",
-      last_school_emis: selectedBeneficiary.last_school_emis || "",
-      last_school_year: selectedBeneficiary.last_school_year || 0
-    };
+    }));
     
-    setFormData(beneficiaryData);
     setIsEdit(true);
     setOpenDialog(true);
     handleMenuClose();
@@ -410,7 +620,7 @@ const Beneficiaries = () => {
         <Box>
           <Button
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/dashboard")}
             sx={{ mb: 1 }}
             variant="outlined"
           >
@@ -445,7 +655,10 @@ const Beneficiaries = () => {
           variant="contained"
           color="warning"
           startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
+          onClick={() => {
+            resetForm();
+            setOpenDialog(true);
+          }}
           size="large"
         >
           Add New Beneficiary
@@ -466,7 +679,10 @@ const Beneficiaries = () => {
             variant="contained"
             color="warning"
             startIcon={<AddIcon />}
-            onClick={() => setOpenDialog(true)}
+            onClick={() => {
+              resetForm();
+              setOpenDialog(true);
+            }}
             size="large"
           >
             Add First Beneficiary
@@ -598,16 +814,18 @@ const Beneficiaries = () => {
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
         fullWidth 
-        maxWidth="sm"
+        maxWidth="md"
         scroll="paper"
       >
         <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
-          <Typography variant="h6" fontWeight="bold">
-            {isEdit ? "Edit Beneficiary" : "Add New Beneficiary"}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Project: {projectTitle}
-          </Typography>
+          <Box>
+            <Typography variant="h6" component="div" fontWeight="bold">
+              {isEdit ? "Edit Beneficiary" : "Add New Beneficiary"}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Project: {projectTitle}
+            </Typography>
+          </Box>
         </DialogTitle>
         
         <DialogContent dividers>
@@ -626,6 +844,8 @@ const Beneficiaries = () => {
                 fullWidth
                 required
                 size="small"
+                error={!formData.first_name.trim()}
+                helperText={!formData.first_name.trim() ? "Required" : ""}
               />
               
               <TextField
@@ -636,39 +856,23 @@ const Beneficiaries = () => {
                 fullWidth
                 required
                 size="small"
+                error={!formData.last_name.trim()}
+                helperText={!formData.last_name.trim() ? "Required" : ""}
               />
             </Box>
             
-            <TextField
-              label="ID Number *"
-              name="id_number"
-              value={formData.id_number}
-              onChange={handleInputChange}
-              fullWidth
-              required
-              size="small"
-            />
-            
-            {/* Personal Information */}
-            <Typography variant="subtitle2" color="primary" fontWeight="bold" sx={{ mt: 2 }}>
-              Personal Information
-            </Typography>
-            
             <Box sx={{ display: "flex", gap: 2 }}>
               <TextField
-                label="Gender"
-                name="gender"
-                value={formData.gender}
+                label="ID Number *"
+                name="id_number"
+                value={formData.id_number}
                 onChange={handleInputChange}
                 fullWidth
+                required
                 size="small"
-                select
-              >
-                <MenuItem value=""><em>Select Gender</em></MenuItem>
-                <MenuItem value="Male">Male</MenuItem>
-                <MenuItem value="Female">Female</MenuItem>
-                <MenuItem value="Other">Other</MenuItem>
-              </TextField>
+                error={!formData.id_number.trim()}
+                helperText={!formData.id_number.trim() ? "Required (13 digits)" : ""}
+              />
               
               <TextField
                 label="Age"
@@ -678,25 +882,48 @@ const Beneficiaries = () => {
                 onChange={handleInputChange}
                 fullWidth
                 size="small"
+                inputProps={{ min: 0, max: 120 }}
               />
             </Box>
             
-            <TextField
-              label="Race"
-              name="race"
-              value={formData.race}
-              onChange={handleInputChange}
-              fullWidth
-              size="small"
-              select
-            >
-              <MenuItem value=""><em>Select Race</em></MenuItem>
-              <MenuItem value="African">African</MenuItem>
-              <MenuItem value="Coloured">Coloured</MenuItem>
-              <MenuItem value="Indian">Indian</MenuItem>
-              <MenuItem value="White">White</MenuItem>
-              <MenuItem value="Other">Other</MenuItem>
-            </TextField>
+            {/* Personal Information */}
+            <Typography variant="subtitle2" color="primary" fontWeight="bold" sx={{ mt: 2 }}>
+              Personal Information
+            </Typography>
+            
+            <Box sx={{ display: "flex", gap: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Gender</InputLabel>
+                <Select
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  label="Gender"
+                >
+                  <MenuItem value=""><em>Select Gender</em></MenuItem>
+                  <MenuItem value="Male">Male</MenuItem>
+                  <MenuItem value="Female">Female</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <FormControl fullWidth size="small">
+                <InputLabel>Race</InputLabel>
+                <Select
+                  name="race"
+                  value={formData.race}
+                  onChange={handleInputChange}
+                  label="Race"
+                >
+                  <MenuItem value=""><em>Select Race</em></MenuItem>
+                  <MenuItem value="African">African</MenuItem>
+                  <MenuItem value="Coloured">Coloured</MenuItem>
+                  <MenuItem value="Indian">Indian</MenuItem>
+                  <MenuItem value="White">White</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
             
             {/* Contact Information */}
             <Typography variant="subtitle2" color="primary" fontWeight="bold" sx={{ mt: 2 }}>
@@ -765,7 +992,7 @@ const Beneficiaries = () => {
               Additional Information
             </Typography>
             
-            <Box sx={{ display: "flex", flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -776,7 +1003,7 @@ const Beneficiaries = () => {
                     size="small"
                   />
                 }
-                label="Disability"
+                label="Person with Disability"
               />
               
               <FormControlLabel
@@ -789,7 +1016,7 @@ const Beneficiaries = () => {
                     size="small"
                   />
                 }
-                label="Youth"
+                label="Youth (18-35 years)"
               />
               
               <FormControlLabel
@@ -818,41 +1045,6 @@ const Beneficiaries = () => {
                 label="SETA Funded"
               />
             </Box>
-            
-            {/* Optional fields (hidden but sent with default values) */}
-            <input type="hidden" name="initials" value={formData.initials} />
-            <input type="hidden" name="title" value={formData.title} />
-            <input type="hidden" name="guardian_contact" value={formData.guardian_contact} />
-            <input type="hidden" name="urban_rural" value={formData.urban_rural} />
-            <input type="hidden" name="physical_address_code" value={formData.physical_address_code} />
-            <input type="hidden" name="stats_area_code" value={formData.stats_area_code} />
-            <input type="hidden" name="home_language" value={formData.home_language} />
-            <input type="hidden" name="learning_programme_type" value={formData.learning_programme_type} />
-            <input type="hidden" name="ofo_code" value={formData.ofo_code} />
-            <input type="hidden" name="nqf_level" value={formData.nqf_level} />
-            <input type="hidden" name="qualification_description" value={formData.qualification_description} />
-            <input type="hidden" name="employer_name" value={formData.employer_name} />
-            <input type="hidden" name="employer_sdl_number" value={formData.employer_sdl_number} />
-            <input type="hidden" name="employer_contact_details" value={formData.employer_contact_details} />
-            <input type="hidden" name="training_provider_name" value={formData.training_provider_name} />
-            <input type="hidden" name="training_provider_sdl_number" value={formData.training_provider_sdl_number} />
-            <input type="hidden" name="training_provider_contact_details" value={formData.training_provider_contact_details} />
-            <input type="hidden" name="training_provider_type" value={formData.training_provider_type} />
-            <input type="hidden" name="training_provider_province" value={formData.training_provider_province} />
-            <input type="hidden" name="training_provider_code" value={formData.training_provider_code} />
-            <input type="hidden" name="training_provider_etqa_id" value={formData.training_provider_etqa_id} />
-            <input type="hidden" name="training_provider_postal_address" value={formData.training_provider_postal_address} />
-            <input type="hidden" name="training_provider_physical_address" value={formData.training_provider_physical_address} />
-            <input type="hidden" name="amount_spent_per_learner" value={formData.amount_spent_per_learner} />
-            <input type="hidden" name="learnership_id" value={formData.learnership_id} />
-            <input type="hidden" name="qualification_id" value={formData.qualification_id} />
-            <input type="hidden" name="non_nqf_subfield_id" value={formData.non_nqf_subfield_id} />
-            <input type="hidden" name="non_nqf_status_id" value={formData.non_nqf_status_id} />
-            <input type="hidden" name="non_nqf_credit" value={formData.non_nqf_credit} />
-            <input type="hidden" name="unit_standard_id" value={formData.unit_standard_id} />
-            <input type="hidden" name="agreement_number" value={formData.agreement_number} />
-            <input type="hidden" name="last_school_emis" value={formData.last_school_emis} />
-            <input type="hidden" name="last_school_year" value={formData.last_school_year} />
           </Box>
         </DialogContent>
         
@@ -860,7 +1052,12 @@ const Beneficiaries = () => {
           <Button onClick={() => setOpenDialog(false)} color="inherit">
             Cancel
           </Button>
-          <Button onClick={handleSave} variant="contained" color="warning">
+          <Button 
+            onClick={handleSave} 
+            variant="contained" 
+            color="warning"
+            disabled={!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()}
+          >
             {isEdit ? "Update" : "Save"} Beneficiary
           </Button>
         </DialogActions>

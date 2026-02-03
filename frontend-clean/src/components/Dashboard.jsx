@@ -29,6 +29,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import { useNavigate } from "react-router-dom"; // ADDED
 import axios from "axios";
 
 const companyLogo = "/logo.jpeg";
@@ -69,6 +70,9 @@ const Dashboard = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
 
+  // ADDED: Navigation hook
+  const navigate = useNavigate();
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -86,6 +90,12 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  // ADDED: Handle project card click
+ // In Dashboard.js - Update the navigation path
+const handleProjectClick = (projectId) => {
+  navigate(`/beneficiaries/${projectId}`);
+};
 
   const resetForm = () => {
     setName("");
@@ -141,9 +151,6 @@ const Dashboard = () => {
     // Append image file if selected
     if (projectImageFile) {
       formData.append('project_image', projectImageFile);
-    } else if (projectImagePreview && isEditMode) {
-      // If editing and there's a preview (but no new file), keep the existing URL
-      // You might want to handle this differently based on your backend
     }
     
     return formData;
@@ -273,8 +280,37 @@ const Dashboard = () => {
       <Grid container spacing={3}>
         {projects.map((p) => (
           <Grid item xs={12} sm={6} md={4} key={p.id}>
-            <Card sx={{ cursor: "pointer", position: "relative", height: "100%" }}>
-              <IconButton sx={{ position: "absolute", right: 8, top: 8, zIndex: 1 }} onClick={(e) => handleMenuClick(e, p)}>
+            {/* UPDATED: Added onClick handler to Card */}
+            <Card 
+              sx={{ 
+                cursor: "pointer", 
+                position: "relative", 
+                height: "100%",
+                transition: 'all 0.3s ease',
+                '&:hover': { 
+                  boxShadow: 6,
+                  transform: 'translateY(-4px)'
+                }
+              }}
+              onClick={() => handleProjectClick(p.id)}
+            >
+              {/* UPDATED: Added stopPropagation to menu button */}
+              <IconButton 
+                sx={{ 
+                  position: "absolute", 
+                  right: 8, 
+                  top: 8, 
+                  zIndex: 1,
+                  bgcolor: 'background.paper',
+                  '&:hover': {
+                    bgcolor: 'action.hover'
+                  }
+                }} 
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent card click when clicking menu
+                  handleMenuClick(e, p);
+                }}
+              >
                 <MoreVertIcon />
               </IconButton>
               {p.project_image_url && (
@@ -301,7 +337,7 @@ const Dashboard = () => {
                       </Box>
                     )}
                     {p.accreditor && (
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Box sx={{ display: '-flex', alignItems: 'center' }}>
                         <Typography variant="caption" color="text.secondary">Accreditor:</Typography>
                         <Chip label={p.accreditor} size="small" sx={{ ml: 1 }} />
                       </Box>
