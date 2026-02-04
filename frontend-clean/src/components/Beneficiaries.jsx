@@ -26,7 +26,6 @@ import {
   Checkbox,
   FormControlLabel,
   Chip,
-  FormHelperText,
   Tabs,
   Tab,
   Divider
@@ -41,7 +40,6 @@ import HomeIcon from "@mui/icons-material/Home";
 import WorkIcon from "@mui/icons-material/Work";
 import SchoolIcon from "@mui/icons-material/School";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -57,6 +55,7 @@ const Beneficiaries = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const [openDialog, setOpenDialog] = useState(false);
+  const [openViewDialog, setOpenViewDialog] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
@@ -67,11 +66,13 @@ const Beneficiaries = () => {
     severity: "success",
   });
 
-  // Initialize form with ALL required fields
+  // Initialize form with ALL required fields from database
   const initialFormData = {
-    // Personal Information
+    // Personal Information (Required by backend)
     first_name: "",
     last_name: "",
+    learner_surname: "", // Database field name
+    learner_names: "",   // Database field name
     initials: "",
     id_number: "",
     date_of_birth: "",
@@ -86,11 +87,11 @@ const Beneficiaries = () => {
     parent_guardian_mobile: "",
     parent_guardian_email: "",
     
-    // Demographic Information
-    youth: true,
-    disability: false,
+    // Demographic Information (with defaults from database)
+    youth: true,           // Default in DB: true
+    disability: false,     // Default in DB: false
     disability_type: "",
-    non_rsa_citizen: false,
+    non_rsa_citizen: false, // Default in DB: false
     
     // Address Information
     learner_province: "",
@@ -98,20 +99,14 @@ const Beneficiaries = () => {
     learner_local_municipality: "",
     residential_area: "",
     area_type: "",
-    physical_address_line1: "",
-    physical_address_line2: "",
-    physical_address_code: "",
-    postal_address_line1: "",
-    postal_address_line2: "",
-    postal_code: "",
     
-    // Programme Information
+    // Programme Information (Required by backend)
     type_of_learning_programme: "Training",
     programme_start_date: new Date().toISOString().split('T')[0],
     programme_completion_date: "",
     certificate_issue_date: "",
     programme_outcome: "",
-    status: "Active",
+    status: "Active", // Default in DB: 'Active'
     
     // Qualification Information
     ofo_code: "",
@@ -136,8 +131,6 @@ const Beneficiaries = () => {
     training_provider_etqa_id: "",
     training_provider_postal_address: "",
     training_provider_physical_address: "",
-    training_provider_accreditation_start_date: "",
-    training_provider_province_code: "",
     
     // Financial Information
     seta_industry_funded: false,
@@ -164,20 +157,20 @@ const Beneficiaries = () => {
     monthly_income: "0",
     skills: "",
     
-    // Validation Fields
-    valid_id_number_length: true,
-    valid_age_for_youth: true,
-    correctly_reported_youth: true,
-    correctly_reported_gender: true,
-    correctly_reported_race: true,
+    // Validation Fields (with defaults from database)
+    valid_id_number_length: true,      // Default in DB: true
+    valid_age_for_youth: true,         // Default in DB: true
+    correctly_reported_youth: true,    // Default in DB: true
+    correctly_reported_gender: true,   // Default in DB: true
+    correctly_reported_race: true,     // Default in DB: true
     
     // Notes
     notes: "",
     validation_errors: "",
-    beneficiary_status: "Current"
+    beneficiary_status: "Current"      // Default in DB: 'Current'
   };
 
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState({ ...initialFormData });
 
   useEffect(() => {
     fetchProjectAndBeneficiaries();
@@ -211,20 +204,11 @@ const Beneficiaries = () => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    
-    if (type === 'checkbox') {
-      setFormData({
-        ...formData,
-        [name]: checked
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
-    }
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const resetForm = () => {
@@ -250,18 +234,20 @@ const Beneficiaries = () => {
         return;
       }
 
-      // Map frontend field names to backend field names
+      // Prepare COMPLETE data for backend - mapping frontend to backend field names
       const dataToSend = {
-        // Required fields
+        // Map frontend field names to backend/database field names
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
+        learner_names: formData.first_name.trim(),      // Database field
+        learner_surname: formData.last_name.trim(),     // Database field
+        learner_initials: formData.initials || "",
         id_number: formData.id_number.trim(),
         
-        // Personal details with defaults
+        // Personal details
         gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
         race: formData.race || "",
-        initials: formData.initials || "",
         date_of_birth: formData.date_of_birth || null,
         home_language: formData.home_language || "English",
         
@@ -279,18 +265,12 @@ const Beneficiaries = () => {
         
         // Address info
         learner_province: formData.learner_province || "",
-        learner_municipality: formData.learner_district_municipality || "",
+        learner_district_municipality: formData.learner_district_municipality || "",
+        learner_local_municipality: formData.learner_local_municipality || "",
         residential_area: formData.residential_area || "",
         area_type: formData.area_type || "",
-        physical_address_line1: formData.physical_address_line1 || "",
-        physical_address_line2: formData.physical_address_line2 || "",
-        physical_address_code: formData.physical_address_code || "",
-        postal_address_line1: formData.postal_address_line1 || "",
-        postal_address_line2: formData.postal_address_line2 || "",
-        postal_code: formData.postal_code || "",
-        learner_local_municipality: formData.learner_local_municipality || "",
         
-        // Programme info
+        // Programme info - REQUIRED by database
         learning_programme_type: formData.type_of_learning_programme || "Training",
         programme_start_date: formData.programme_start_date || new Date().toISOString().split('T')[0],
         programme_completion_date: formData.programme_completion_date || null,
@@ -321,8 +301,6 @@ const Beneficiaries = () => {
         training_provider_etqa_id: formData.training_provider_etqa_id || "",
         training_provider_postal_address: formData.training_provider_postal_address || "",
         training_provider_physical_address: formData.training_provider_physical_address || "",
-        training_provider_accreditation_start_date: formData.training_provider_accreditation_start_date || null,
-        training_provider_province_code: formData.training_provider_province_code || "",
         
         // Financial info
         seta_funded: Boolean(formData.seta_industry_funded),
@@ -362,7 +340,7 @@ const Beneficiaries = () => {
         beneficiary_status: formData.beneficiary_status || "Current"
       };
 
-      console.log("Sending data to backend:", dataToSend);
+      console.log("Sending COMPLETE data to backend:", JSON.stringify(dataToSend, null, 2));
 
       const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`,
@@ -370,7 +348,8 @@ const Beneficiaries = () => {
         {
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: 10000
         }
       );
 
@@ -380,14 +359,18 @@ const Beneficiaries = () => {
       resetForm();
       fetchProjectAndBeneficiaries();
     } catch (err) {
-      console.error("Error adding beneficiary:", err);
-      console.error("Error response:", err.response?.data);
+      console.error("❌ ERROR adding beneficiary:", err);
+      console.error("❌ Error response data:", err.response?.data);
+      console.error("❌ Error status:", err.response?.status);
       
       let errorMessage = "Failed to add beneficiary. ";
+      
       if (err.response?.data?.error) {
-        errorMessage += err.response.data.error;
-      } else if (err.response?.status === 409) {
-        errorMessage = "ID number already exists in the system";
+        errorMessage += `Server error: ${JSON.stringify(err.response.data.error)}`;
+      } else if (err.response?.status === 500) {
+        errorMessage += "Internal server error. Check backend logs for details.";
+      } else if (err.message) {
+        errorMessage += `Error: ${err.message}`;
       }
       
       showSnackbar(errorMessage, "error");
@@ -503,6 +486,11 @@ const Beneficiaries = () => {
     handleMenuClose();
   };
 
+  const handleViewClick = (beneficiary) => {
+    setSelectedBeneficiary(beneficiary);
+    setOpenViewDialog(true);
+  };
+
   const handleSave = () => {
     if (isEdit) {
       handleUpdateBeneficiary();
@@ -512,15 +500,9 @@ const Beneficiaries = () => {
   };
 
   // Tab panel component
-  const TabPanel = ({ children, value, index, ...other }) => {
+  const TabPanel = ({ children, value, index }) => {
     return (
-      <div
-        role="tabpanel"
-        hidden={value !== index}
-        id={`beneficiary-tabpanel-${index}`}
-        aria-labelledby={`beneficiary-tab-${index}`}
-        {...other}
-      >
+      <div hidden={value !== index}>
         {value === index && (
           <Box sx={{ p: 3 }}>
             {children}
@@ -590,7 +572,7 @@ const Beneficiaries = () => {
         </Button>
       </Box>
 
-      {/* BENEFICIARIES GRID (Same as before) */}
+      {/* BENEFICIARIES GRID */}
       {beneficiaries.length === 0 ? (
         <Paper sx={{ p: 6, textAlign: "center", mt: 4, borderRadius: 3 }}>
           <PersonIcon sx={{ fontSize: 80, color: "text.secondary", mb: 3, opacity: 0.7 }} />
@@ -617,15 +599,19 @@ const Beneficiaries = () => {
         <Grid container spacing={3}>
           {beneficiaries.map((beneficiary) => (
             <Grid item xs={12} sm={6} md={4} key={beneficiary.id}>
-              <Card sx={{ 
-                height: "100%", 
-                position: "relative", 
-                transition: 'all 0.3s ease',
-                '&:hover': { 
-                  boxShadow: 6,
-                  transform: 'translateY(-4px)'
-                }
-              }}>
+              <Card 
+                sx={{ 
+                  height: "100%", 
+                  position: "relative", 
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                  '&:hover': { 
+                    boxShadow: 6,
+                    transform: 'translateY(-4px)'
+                  }
+                }}
+                onClick={() => handleViewClick(beneficiary)}
+              >
                 <IconButton
                   sx={{ 
                     position: "absolute", 
@@ -637,7 +623,10 @@ const Beneficiaries = () => {
                       bgcolor: 'action.hover'
                     }
                   }}
-                  onClick={(e) => handleMenuOpen(e, beneficiary)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMenuOpen(e, beneficiary);
+                  }}
                 >
                   <MoreVertIcon />
                 </IconButton>
@@ -708,6 +697,33 @@ const Beneficiaries = () => {
                     )}
                   </Stack>
                   
+                  <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {beneficiary.disability && (
+                      <Chip 
+                        label="Disability" 
+                        size="small" 
+                        color="secondary" 
+                        variant="outlined"
+                      />
+                    )}
+                    {beneficiary.youth && (
+                      <Chip 
+                        label="Youth" 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined"
+                      />
+                    )}
+                    {beneficiary.non_rsa_citizen && (
+                      <Chip 
+                        label="Non-RSA" 
+                        size="small" 
+                        color="warning" 
+                        variant="outlined"
+                      />
+                    )}
+                  </Box>
+                  
                   {beneficiary.created_at && (
                     <Typography 
                       variant="caption" 
@@ -734,7 +750,7 @@ const Beneficiaries = () => {
         </Grid>
       )}
 
-      {/* ADD/EDIT DIALOG WITH TABS */}
+      {/* ADD/EDIT DIALOG WITH ALL REQUIRED FIELDS */}
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
@@ -754,105 +770,78 @@ const Beneficiaries = () => {
         </DialogTitle>
         
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
-            <Tab label="Personal Info" />
-            <Tab label="Contact & Address" />
+          <Tabs 
+            value={activeTab} 
+            onChange={(e, newValue) => setActiveTab(newValue)}
+            aria-label="beneficiary form tabs"
+          >
+            <Tab label="Basic Info" />
             <Tab label="Programme Details" />
             <Tab label="Employment & Training" />
-            <Tab label="Financial & Other" />
+            <Tab label="Additional Info" />
           </Tabs>
         </Box>
         
         <DialogContent dividers sx={{ p: 0 }}>
-          {/* TAB 1: Personal Information */}
+          {/* TAB 1: Basic Information */}
           <TabPanel value={activeTab} index={0}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="First Name *"
-                  name="first_name"
                   value={formData.first_name}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("first_name", e.target.value)}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.first_name.trim()}
-                  helperText={!formData.first_name.trim() ? "Required" : ""}
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Last Name *"
-                  name="last_name"
                   value={formData.last_name}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("last_name", e.target.value)}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.last_name.trim()}
-                  helperText={!formData.last_name.trim() ? "Required" : ""}
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  label="Initials"
-                  name="initials"
-                  value={formData.initials}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="ID Number *"
-                  name="id_number"
                   value={formData.id_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("id_number", e.target.value)}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.id_number.trim()}
-                  helperText="13-digit South African ID"
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  label="Date of Birth"
-                  name="date_of_birth"
-                  type="date"
-                  value={formData.date_of_birth}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Age"
-                  name="age"
                   type="number"
                   value={formData.age}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("age", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Gender *</InputLabel>
                   <Select
-                    name="gender"
                     value={formData.gender}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("gender", e.target.value)}
                     label="Gender *"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Gender</em></MenuItem>
                     <MenuItem value="Male">Male</MenuItem>
@@ -862,14 +851,14 @@ const Beneficiaries = () => {
                 </FormControl>
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Race</InputLabel>
                   <Select
-                    name="race"
                     value={formData.race}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("race", e.target.value)}
                     label="Race"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Race</em></MenuItem>
                     <MenuItem value="African">African</MenuItem>
@@ -881,14 +870,37 @@ const Beneficiaries = () => {
                 </FormControl>
               </Grid>
               
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Mobile Phone"
+                  value={formData.mobile_phone}
+                  onChange={(e) => handleInputChange("mobile_phone", e.target.value)}
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={formData.email_address}
+                  onChange={(e) => handleInputChange("email_address", e.target.value)}
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Home Language</InputLabel>
                   <Select
-                    name="home_language"
                     value={formData.home_language}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("home_language", e.target.value)}
                     label="Home Language"
+                    variant="outlined"
                   >
                     <MenuItem value="English">English</MenuItem>
                     <MenuItem value="Afrikaans">Afrikaans</MenuItem>
@@ -902,36 +914,71 @@ const Beneficiaries = () => {
               </Grid>
               
               <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Date of Birth"
+                  type="date"
+                  value={formData.date_of_birth}
+                  onChange={(e) => handleInputChange("date_of_birth", e.target.value)}
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Initials"
+                  value={formData.initials}
+                  onChange={(e) => handleInputChange("initials", e.target.value)}
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                />
+              </Grid>
+            </Grid>
+            
+            <Divider sx={{ my: 3 }} />
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
+                  Demographic Information
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.youth}
-                      onChange={handleInputChange}
-                      name="youth"
+                      onChange={(e) => handleInputChange("youth", e.target.checked)}
                       color="primary"
                     />
                   }
                   label="Youth (18-35 years)"
                 />
-                
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.disability}
-                      onChange={handleInputChange}
-                      name="disability"
+                      onChange={(e) => handleInputChange("disability", e.target.checked)}
                       color="primary"
                     />
                   }
                   label="Person with Disability"
                 />
-                
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.non_rsa_citizen}
-                      onChange={handleInputChange}
-                      name="non_rsa_citizen"
+                      onChange={(e) => handleInputChange("non_rsa_citizen", e.target.checked)}
                       color="primary"
                     />
                   }
@@ -943,115 +990,55 @@ const Beneficiaries = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Disability Type"
-                    name="disability_type"
                     value={formData.disability_type}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("disability_type", e.target.value)}
                     fullWidth
                     size="small"
+                    variant="outlined"
                   />
                 </Grid>
               )}
             </Grid>
-          </TabPanel>
-          
-          {/* TAB 2: Contact & Address */}
-          <TabPanel value={activeTab} index={1}>
+            
+            <Divider sx={{ my: 3 }} />
+            
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Mobile Phone"
-                  name="mobile_phone"
-                  value={formData.mobile_phone}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Email"
-                  name="email_address"
-                  type="email"
-                  value={formData.email_address}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Guardian Mobile"
-                  name="parent_guardian_mobile"
-                  value={formData.parent_guardian_mobile}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Guardian Email"
-                  name="parent_guardian_email"
-                  type="email"
-                  value={formData.parent_guardian_email}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
               <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  Residential Address
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
+                  Address Information
                 </Typography>
               </Grid>
               
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Province"
-                  name="learner_province"
                   value={formData.learner_province}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("learner_province", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="District Municipality"
-                  name="learner_district_municipality"
                   value={formData.learner_district_municipality}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("learner_district_municipality", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Local Municipality"
-                  name="learner_local_municipality"
                   value={formData.learner_local_municipality}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("learner_local_municipality", e.target.value)}
                   fullWidth
                   size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Residential Area"
-                  name="residential_area"
-                  value={formData.residential_area}
-                  onChange={handleInputChange}
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
+                  variant="outlined"
                 />
               </Grid>
               
@@ -1059,10 +1046,10 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Area Type</InputLabel>
                   <Select
-                    name="area_type"
                     value={formData.area_type}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("area_type", e.target.value)}
                     label="Area Type"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Area Type</em></MenuItem>
                     <MenuItem value="Urban">Urban</MenuItem>
@@ -1072,72 +1059,40 @@ const Beneficiaries = () => {
               </Grid>
               
               <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  Physical Address
-                </Typography>
-              </Grid>
-              
-              <Grid item xs={12}>
                 <TextField
-                  label="Address Line 1"
-                  name="physical_address_line1"
-                  value={formData.physical_address_line1}
-                  onChange={handleInputChange}
+                  label="Residential Area"
+                  value={formData.residential_area}
+                  onChange={(e) => handleInputChange("residential_area", e.target.value)}
                   fullWidth
+                  multiline
+                  rows={2}
                   size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Address Line 2"
-                  name="physical_address_line2"
-                  value={formData.physical_address_line2}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Postal Code"
-                  name="postal_code"
-                  value={formData.postal_code}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Address Code"
-                  name="physical_address_code"
-                  value={formData.physical_address_code}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
+                  variant="outlined"
                 />
               </Grid>
             </Grid>
           </TabPanel>
           
-          {/* TAB 3: Programme Details */}
-          <TabPanel value={activeTab} index={2}>
+          {/* TAB 2: Programme Details */}
+          <TabPanel value={activeTab} index={1}>
             <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
+                  Programme Information
+                </Typography>
+              </Grid>
+              
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Learning Programme Type</InputLabel>
+                  <InputLabel>Programme Type</InputLabel>
                   <Select
-                    name="type_of_learning_programme"
                     value={formData.type_of_learning_programme}
-                    onChange={handleInputChange}
-                    label="Learning Programme Type"
+                    onChange={(e) => handleInputChange("type_of_learning_programme", e.target.value)}
+                    label="Programme Type"
+                    variant="outlined"
                   >
                     <MenuItem value="Training">Training</MenuItem>
                     <MenuItem value="Workshop">Workshop</MenuItem>
-                    <MenuItem value="Seminar">Seminar</MenuItem>
                     <MenuItem value="Course">Course</MenuItem>
                     <MenuItem value="Other">Other</MenuItem>
                   </Select>
@@ -1148,10 +1103,10 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
                   <Select
-                    name="status"
                     value={formData.status}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("status", e.target.value)}
                     label="Status"
+                    variant="outlined"
                   >
                     <MenuItem value="Active">Active</MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
@@ -1165,12 +1120,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Programme Start Date"
-                  name="programme_start_date"
                   type="date"
                   value={formData.programme_start_date}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("programme_start_date", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1178,12 +1133,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Programme Completion Date"
-                  name="programme_completion_date"
                   type="date"
                   value={formData.programme_completion_date}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("programme_completion_date", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1191,12 +1146,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Certificate Issue Date"
-                  name="certificate_issue_date"
                   type="date"
                   value={formData.certificate_issue_date}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("certificate_issue_date", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1205,84 +1160,91 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Programme Outcome</InputLabel>
                   <Select
-                    name="programme_outcome"
                     value={formData.programme_outcome}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("programme_outcome", e.target.value)}
                     label="Programme Outcome"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Outcome</em></MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
                     <MenuItem value="In Progress">In Progress</MenuItem>
                     <MenuItem value="Certified">Certified</MenuItem>
-                    <MenuItem value="Not Completed">Not Completed</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+              
+              <Divider sx={{ my: 2, width: '100%' }} />
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
+                  Qualification Information
+                </Typography>
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="OFO Code"
-                  name="ofo_code"
                   value={formData.ofo_code}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("ofo_code", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="NQF Level"
-                  name="nqf_level"
                   value={formData.nqf_level}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("nqf_level", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Qualification ID"
-                  name="qualification_id"
                   value={formData.qualification_id}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("qualification_id", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Learnership ID"
-                  name="learnership_id"
                   value={formData.learnership_id}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("learnership_id", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Programme Description"
-                  name="programme_description"
                   value={formData.programme_description}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("programme_description", e.target.value)}
                   fullWidth
                   multiline
                   rows={3}
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
             </Grid>
           </TabPanel>
           
-          {/* TAB 4: Employment & Training */}
-          <TabPanel value={activeTab} index={3}>
+          {/* TAB 3: Employment & Training */}
+          <TabPanel value={activeTab} index={2}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
                   Employment Information
                 </Typography>
               </Grid>
@@ -1291,10 +1253,10 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Employment Status</InputLabel>
                   <Select
-                    name="employment_status"
                     value={formData.employment_status}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("employment_status", e.target.value)}
                     label="Employment Status"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Status</em></MenuItem>
                     <MenuItem value="Employed">Employed</MenuItem>
@@ -1308,51 +1270,53 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Current Employer"
-                  name="current_employer"
                   value={formData.current_employer}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("current_employer", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Employer Name"
-                  name="employer_name"
                   value={formData.employer_name}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("employer_name", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Employer SDL Number"
-                  name="employer_sdl_number"
                   value={formData.employer_sdl_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("employer_sdl_number", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Employer Contact Details"
-                  name="employer_contact_details"
                   value={formData.employer_contact_details}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("employer_contact_details", e.target.value)}
                   fullWidth
                   multiline
                   rows={2}
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
+              <Divider sx={{ my: 2, width: '100%' }} />
+              
               <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" fontWeight="bold" color="primary" gutterBottom>
                   Training Provider Information
                 </Typography>
               </Grid>
@@ -1360,22 +1324,22 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Training Provider Name"
-                  name="training_provider_name"
                   value={formData.training_provider_name}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("training_provider_name", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Training Provider SDL Number"
-                  name="training_provider_sdl_number"
                   value={formData.training_provider_sdl_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("training_provider_sdl_number", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
@@ -1383,10 +1347,10 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Provider Type</InputLabel>
                   <Select
-                    name="training_provider_type"
                     value={formData.training_provider_type}
-                    onChange={handleInputChange}
+                    onChange={(e) => handleInputChange("training_provider_type", e.target.value)}
                     label="Provider Type"
+                    variant="outlined"
                   >
                     <MenuItem value=""><em>Select Type</em></MenuItem>
                     <MenuItem value="Private">Private</MenuItem>
@@ -1398,100 +1362,51 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Training Provider Province"
-                  name="training_provider_province"
                   value={formData.training_provider_province}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("training_provider_province", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <TextField
-                  label="Training Provider Code"
-                  name="training_provider_code"
-                  value={formData.training_provider_code}
-                  onChange={handleInputChange}
+                  label="Training Provider Contact Details"
+                  value={formData.training_provider_contact_details}
+                  onChange={(e) => handleInputChange("training_provider_contact_details", e.target.value)}
                   fullWidth
+                  multiline
+                  rows={2}
                   size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Training Provider ETQA ID"
-                  name="training_provider_etqa_id"
-                  value={formData.training_provider_etqa_id}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Training Provider Postal Address"
-                  name="training_provider_postal_address"
                   value={formData.training_provider_postal_address}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("training_provider_postal_address", e.target.value)}
                   fullWidth
                   multiline
                   rows={2}
                   size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Training Provider Physical Address"
-                  name="training_provider_physical_address"
-                  value={formData.training_provider_physical_address}
-                  onChange={handleInputChange}
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Training Provider Contact Details"
-                  name="training_provider_contact_details"
-                  value={formData.training_provider_contact_details}
-                  onChange={handleInputChange}
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Accreditation Start Date"
-                  name="training_provider_accreditation_start_date"
-                  type="date"
-                  value={formData.training_provider_accreditation_start_date}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                  InputLabelProps={{ shrink: true }}
+                  variant="outlined"
                 />
               </Grid>
             </Grid>
           </TabPanel>
           
-          {/* TAB 5: Financial & Other */}
-          <TabPanel value={activeTab} index={4}>
+          {/* TAB 4: Additional Info */}
+          <TabPanel value={activeTab} index={3}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.seta_industry_funded}
-                      onChange={handleInputChange}
-                      name="seta_industry_funded"
+                      onChange={(e) => handleInputChange("seta_industry_funded", e.target.checked)}
                       color="primary"
                     />
                   }
@@ -1502,12 +1417,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Amount Spent per Learner"
-                  name="amount_spent_per_learner"
                   type="number"
                   value={formData.amount_spent_per_learner}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("amount_spent_per_learner", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                   InputProps={{
                     startAdornment: <Typography variant="body2" sx={{ mr: 1 }}>R</Typography>,
                   }}
@@ -1517,12 +1432,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Monthly Income"
-                  name="monthly_income"
                   type="number"
                   value={formData.monthly_income}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("monthly_income", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                   InputProps={{
                     startAdornment: <Typography variant="body2" sx={{ mr: 1 }}>R</Typography>,
                   }}
@@ -1532,103 +1447,60 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Agreement/MOA Number"
-                  name="agreement_moa_number"
                   value={formData.agreement_moa_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("agreement_moa_number", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Project Number"
-                  name="project_number"
                   value={formData.project_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("project_number", e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Activity Number"
-                  name="activity_number"
                   value={formData.activity_number}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("activity_number", e.target.value)}
                   fullWidth
                   size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="App Sub Programme"
-                  name="app_sub_programme"
-                  value={formData.app_sub_programme}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Unit Standard ID"
-                  name="unit_standard_id"
-                  value={formData.unit_standard_id}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Last School EMIS"
-                  name="last_school_emis"
-                  value={formData.last_school_emis}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Last School Year"
-                  name="last_school_year"
-                  value={formData.last_school_year}
-                  onChange={handleInputChange}
-                  fullWidth
-                  size="small"
+                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Skills"
-                  name="skills"
                   value={formData.skills}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("skills", e.target.value)}
                   fullWidth
                   multiline
-                  rows={2}
+                  rows={3}
                   size="small"
+                  variant="outlined"
+                  placeholder="List skills separated by commas"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Notes"
-                  name="notes"
                   value={formData.notes}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("notes", e.target.value)}
                   fullWidth
                   multiline
-                  rows={3}
+                  rows={4}
                   size="small"
+                  variant="outlined"
                 />
               </Grid>
             </Grid>
@@ -1649,7 +1521,7 @@ const Beneficiaries = () => {
               </Button>
             )}
           </Box>
-          {activeTab < 4 ? (
+          {activeTab < 3 ? (
             <Button 
               onClick={() => setActiveTab(activeTab + 1)}
               variant="outlined"
@@ -1667,6 +1539,148 @@ const Beneficiaries = () => {
             </Button>
           )}
         </DialogActions>
+      </Dialog>
+
+      {/* VIEW BENEFICIARY DETAILS DIALOG */}
+      <Dialog 
+        open={openViewDialog} 
+        onClose={() => setOpenViewDialog(false)} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{
+          sx: { maxHeight: '80vh' }
+        }}
+      >
+        {selectedBeneficiary && (
+          <>
+            <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                  {selectedBeneficiary.first_name?.charAt(0)?.toUpperCase()}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" component="div" fontWeight="bold">
+                    {selectedBeneficiary.first_name} {selectedBeneficiary.last_name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ID: {selectedBeneficiary.id_number}
+                  </Typography>
+                </Box>
+              </Box>
+            </DialogTitle>
+            
+            <DialogContent dividers>
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Personal Information
+                  </Typography>
+                  <Box sx={{ pl: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Gender:</strong> {selectedBeneficiary.gender || "Not specified"}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Age:</strong> {selectedBeneficiary.age || "N/A"} years
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Race:</strong> {selectedBeneficiary.race || "Not specified"}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Contact Information
+                  </Typography>
+                  <Box sx={{ pl: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Phone:</strong> {selectedBeneficiary.mobile_phone || "Not specified"}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Email:</strong> {selectedBeneficiary.email || "Not specified"}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Address Information
+                  </Typography>
+                  <Box sx={{ pl: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Residential Area:</strong> {selectedBeneficiary.residential_area || "Not specified"}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Province:</strong> {selectedBeneficiary.learner_province || "Not specified"}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Municipality:</strong> {selectedBeneficiary.learner_municipality || "Not specified"}
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Demographic Information
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+                    {selectedBeneficiary.youth && (
+                      <Chip label="Youth" color="primary" size="small" />
+                    )}
+                    {selectedBeneficiary.disability && (
+                      <Chip label="Person with Disability" color="secondary" size="small" />
+                    )}
+                    {selectedBeneficiary.non_rsa_citizen && (
+                      <Chip label="Non-RSA Citizen" color="warning" size="small" />
+                    )}
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Status Information
+                  </Typography>
+                  <Box sx={{ pl: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Status:</strong> <Chip 
+                        label={selectedBeneficiary.status || "Active"} 
+                        size="small" 
+                        color={
+                          selectedBeneficiary.status === 'Active' ? 'success' :
+                          selectedBeneficiary.status === 'Completed' ? 'primary' :
+                          selectedBeneficiary.status === 'Graduated' ? 'warning' : 'default'
+                        }
+                      />
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Date Added:</strong> {new Date(selectedBeneficiary.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </DialogContent>
+            
+            <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Button onClick={() => setOpenViewDialog(false)} color="inherit">
+                Close
+              </Button>
+              <Button 
+                onClick={() => {
+                  setOpenViewDialog(false);
+                  handleEditClick();
+                }}
+                variant="outlined"
+                color="primary"
+              >
+                Edit
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
 
       {/* MENU */}
