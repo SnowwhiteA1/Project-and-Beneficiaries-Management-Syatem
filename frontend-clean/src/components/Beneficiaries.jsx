@@ -26,17 +26,10 @@ import {
   Checkbox,
   FormControlLabel,
   Chip,
+  FormHelperText,
   Tabs,
   Tab,
-  Divider,
-  InputAdornment,
-  Tooltip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  LinearProgress,
-  CardMedia
+  Divider
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
@@ -48,21 +41,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import WorkIcon from "@mui/icons-material/Work";
 import SchoolIcon from "@mui/icons-material/School";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import BadgeIcon from "@mui/icons-material/Badge";
-import LanguageIcon from "@mui/icons-material/Language";
-import AccessibleIcon from "@mui/icons-material/Accessible";
-import PublicIcon from "@mui/icons-material/Public";
-import BusinessIcon from "@mui/icons-material/Business";
-import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
-import DescriptionIcon from "@mui/icons-material/Description";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
-import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
-import ImageIcon from "@mui/icons-material/Image";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DownloadIcon from "@mui/icons-material/Download";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -78,7 +57,6 @@ const Beneficiaries = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [openViewDialog, setOpenViewDialog] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
@@ -89,51 +67,7 @@ const Beneficiaries = () => {
     severity: "success",
   });
 
-  // Document upload states
-  const [idDocument, setIdDocument] = useState(null);
-  const [qualificationDocument, setQualificationDocument] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [existingDocuments, setExistingDocuments] = useState({
-    id_document_url: "",
-    qualification_document_url: ""
-  });
-
-  // South African provinces
-  const provinces = [
-    "Eastern Cape",
-    "Free State",
-    "Gauteng",
-    "KwaZulu-Natal",
-    "Limpopo",
-    "Mpumalanga",
-    "North West",
-    "Northern Cape",
-    "Western Cape"
-  ];
-
-  // South African languages
-  const languages = [
-    "English",
-    "Afrikaans",
-    "isiZulu",
-    "isiXhosa",
-    "Sesotho",
-    "Setswana",
-    "Sesotho sa Leboa",
-    "Xitsonga",
-    "siSwati",
-    "Tshivenda",
-    "isiNdebele",
-    "Other"
-  ];
-
-  // NQF Levels
-  const nqfLevels = [
-    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
-  ];
-
-  // Initialize form with ALL required fields from database
+  // Initialize form with ALL required fields
   const initialFormData = {
     // Personal Information
     first_name: "",
@@ -166,6 +100,7 @@ const Beneficiaries = () => {
     area_type: "",
     physical_address_line1: "",
     physical_address_line2: "",
+    physical_address_code: "",
     postal_address_line1: "",
     postal_address_line2: "",
     postal_code: "",
@@ -201,6 +136,8 @@ const Beneficiaries = () => {
     training_provider_etqa_id: "",
     training_provider_postal_address: "",
     training_provider_physical_address: "",
+    training_provider_accreditation_start_date: "",
+    training_provider_province_code: "",
     
     // Financial Information
     seta_industry_funded: false,
@@ -236,14 +173,11 @@ const Beneficiaries = () => {
     
     // Notes
     notes: "",
-    beneficiary_status: "Current",
-    
-    // Document URLs (will be populated from backend)
-    id_document_url: "",
-    qualification_document_url: ""
+    validation_errors: "",
+    beneficiary_status: "Current"
   };
 
-  const [formData, setFormData] = useState({ ...initialFormData });
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     fetchProjectAndBeneficiaries();
@@ -277,202 +211,86 @@ const Beneficiaries = () => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    
+    if (type === 'checkbox') {
+      setFormData({
+        ...formData,
+        [name]: checked
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
   };
 
   const resetForm = () => {
     setFormData({ ...initialFormData });
-    setIdDocument(null);
-    setQualificationDocument(null);
-    setExistingDocuments({
-      id_document_url: "",
-      qualification_document_url: ""
-    });
     setSelectedBeneficiary(null);
     setIsEdit(false);
     setActiveTab(0);
-    setUploadProgress(0);
-    setIsUploading(false);
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    
-    if (!formData.first_name.trim()) errors.push("First name is required");
-    if (!formData.last_name.trim()) errors.push("Last name is required");
-    if (!formData.id_number.trim()) errors.push("ID number is required");
-    if (!formData.gender.trim()) errors.push("Gender is required");
-    
-    if (formData.age) {
-      const ageNum = parseInt(formData.age);
-      if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
-        errors.push("Age must be between 0 and 120");
-      }
-    }
-    
-    return errors;
-  };
-
-  const handleFileUpload = (event, type) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showSnackbar("File size must be less than 5MB", "error");
-      return;
-    }
-
-    // Check file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      showSnackbar("Only JPG, PNG, and PDF files are allowed", "error");
-      return;
-    }
-
-    if (type === 'id') {
-      setIdDocument(file);
-    } else if (type === 'qualification') {
-      setQualificationDocument(file);
-    }
-  };
-
-  const removeDocument = (type) => {
-    if (type === 'id') {
-      setIdDocument(null);
-      setFormData(prev => ({
-        ...prev,
-        id_document_url: ""
-      }));
-    } else if (type === 'qualification') {
-      setQualificationDocument(null);
-      setFormData(prev => ({
-        ...prev,
-        qualification_document_url: ""
-      }));
-    }
-  };
-
-  const uploadDocuments = async () => {
-    const formDataToSend = new FormData();
-    let documentsUploaded = {
-      id_document_url: existingDocuments.id_document_url,
-      qualification_document_url: existingDocuments.qualification_document_url
-    };
-
-    if (idDocument) {
-      formDataToSend.append('id_document', idDocument);
-    }
-    if (qualificationDocument) {
-      formDataToSend.append('qualification_document', qualificationDocument);
-    }
-
-    if (formDataToSend.has('id_document') || formDataToSend.has('qualification_document')) {
-      try {
-        setIsUploading(true);
-        setUploadProgress(30);
-
-        // Simulate upload progress
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev >= 90) {
-              clearInterval(progressInterval);
-              return prev;
-            }
-            return prev + 10;
-          });
-        }, 300);
-
-        // Upload documents
-        const uploadResponse = await axios.post(
-          `${API_BASE}/api/beneficiaries/upload`,
-          formDataToSend,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
-          }
-        );
-
-        clearInterval(progressInterval);
-        setUploadProgress(100);
-        
-        documentsUploaded = {
-          ...documentsUploaded,
-          ...uploadResponse.data
-        };
-
-        showSnackbar("Documents uploaded successfully", "success");
-      } catch (err) {
-        console.error("Error uploading documents:", err);
-        showSnackbar("Failed to upload documents", "error");
-      } finally {
-        setIsUploading(false);
-        setTimeout(() => setUploadProgress(0), 1000);
-      }
-    }
-
-    return documentsUploaded;
   };
 
   const handleAddBeneficiary = async () => {
     try {
-      // Validate form
-      const errors = validateForm();
-      if (errors.length > 0) {
-        showSnackbar(errors.join(", "), "error");
+      // Validate required fields
+      if (!formData.first_name.trim()) {
+        showSnackbar("First name is required", "error");
+        return;
+      }
+      if (!formData.last_name.trim()) {
+        showSnackbar("Last name is required", "error");
+        return;
+      }
+      if (!formData.id_number.trim()) {
+        showSnackbar("ID number is required", "error");
         return;
       }
 
-      // Upload documents first
-      setIsUploading(true);
-      const uploadedDocuments = await uploadDocuments();
-      setIsUploading(false);
-
-      // Prepare data for backend
+      // Map frontend field names to backend field names
       const dataToSend = {
-        // Personal Information
+        // Required fields
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
-        learner_names: formData.first_name.trim(),
-        learner_surname: formData.last_name.trim(),
-        learner_initials: formData.initials || "",
         id_number: formData.id_number.trim(),
-        date_of_birth: formData.date_of_birth || null,
+        
+        // Personal details with defaults
         gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
         race: formData.race || "",
+        initials: formData.initials || "",
+        date_of_birth: formData.date_of_birth || null,
         home_language: formData.home_language || "English",
         
-        // Contact Information
+        // Contact information
         mobile_phone: formData.mobile_phone || "",
         email: formData.email_address || "",
         parent_guardian_mobile: formData.parent_guardian_mobile || "",
         parent_guardian_email: formData.parent_guardian_email || "",
         
-        // Demographic Information
-        youth: Boolean(formData.youth),
+        // Demographic info
         disability: Boolean(formData.disability),
         disability_type: formData.disability_type || "",
+        youth: Boolean(formData.youth),
         non_rsa_citizen: Boolean(formData.non_rsa_citizen),
         
-        // Address Information
+        // Address info
         learner_province: formData.learner_province || "",
-        learner_district_municipality: formData.learner_district_municipality || "",
-        learner_local_municipality: formData.learner_local_municipality || "",
+        learner_municipality: formData.learner_district_municipality || "",
         residential_area: formData.residential_area || "",
         area_type: formData.area_type || "",
         physical_address_line1: formData.physical_address_line1 || "",
         physical_address_line2: formData.physical_address_line2 || "",
+        physical_address_code: formData.physical_address_code || "",
         postal_address_line1: formData.postal_address_line1 || "",
         postal_address_line2: formData.postal_address_line2 || "",
         postal_code: formData.postal_code || "",
+        learner_local_municipality: formData.learner_local_municipality || "",
         
-        // Programme Information
+        // Programme info
         learning_programme_type: formData.type_of_learning_programme || "Training",
         programme_start_date: formData.programme_start_date || new Date().toISOString().split('T')[0],
         programme_completion_date: formData.programme_completion_date || null,
@@ -480,7 +298,7 @@ const Beneficiaries = () => {
         programme_outcome: formData.programme_outcome || "",
         status: formData.status || "Active",
         
-        // Qualification Information
+        // Qualification info
         ofo_code: formData.ofo_code || "",
         nqf_level: formData.nqf_level || "",
         qualification_id: formData.qualification_id || "",
@@ -488,12 +306,12 @@ const Beneficiaries = () => {
         learnership_id: formData.learnership_id || "",
         unit_standard_id: formData.unit_standard_id || "",
         
-        // Employer Information
+        // Employer info
         employer_name: formData.employer_name || "",
         employer_sdl_number: formData.employer_sdl_number || "",
         employer_contact_details: formData.employer_contact_details || "",
         
-        // Training Provider Information
+        // Training provider info
         training_provider_name: formData.training_provider_name || "",
         training_provider_sdl_number: formData.training_provider_sdl_number || "",
         training_provider_contact_details: formData.training_provider_contact_details || "",
@@ -503,40 +321,48 @@ const Beneficiaries = () => {
         training_provider_etqa_id: formData.training_provider_etqa_id || "",
         training_provider_postal_address: formData.training_provider_postal_address || "",
         training_provider_physical_address: formData.training_provider_physical_address || "",
+        training_provider_accreditation_start_date: formData.training_provider_accreditation_start_date || null,
+        training_provider_province_code: formData.training_provider_province_code || "",
         
-        // Financial Information
+        // Financial info
         seta_funded: Boolean(formData.seta_industry_funded),
         amount_spent_per_learner: formData.amount_spent_per_learner ? parseFloat(formData.amount_spent_per_learner) : 0,
         
-        // Additional Fields
+        // Additional fields
         agreement_number: formData.agreement_moa_number || "",
         project_number: formData.project_number || "",
         activity_number: formData.activity_number || "",
         app_sub_programme: formData.app_sub_programme || "",
         
-        // School Information
+        // School info
         last_school_emis: formData.last_school_emis || "",
         last_school_year: formData.last_school_year || "",
         
-        // Non-NQF Fields
+        // Non-NQF fields
         non_nqf_subfield_id: formData.non_nqf_intervention_subfield || "",
         non_nqf_status_id: formData.non_nqf_intervention_status || "",
         non_nqf_credit: formData.non_nqf_intervention_credit || "",
         
-        // Employment Information
+        // Employment info
         employment_status: formData.employment_status || "",
         current_employer: formData.current_employer || "",
         monthly_income: formData.monthly_income ? parseFloat(formData.monthly_income) : 0,
         skills: formData.skills || "",
         
-        // Document URLs
-        id_document_url: uploadedDocuments.id_document_url || "",
-        qualification_document_url: uploadedDocuments.qualification_document_url || "",
+        // Validation fields
+        valid_id_number_length: Boolean(formData.valid_id_number_length),
+        valid_age_for_youth: Boolean(formData.valid_age_for_youth),
+        correctly_reported_youth: Boolean(formData.correctly_reported_youth),
+        correctly_reported_gender: Boolean(formData.correctly_reported_gender),
+        correctly_reported_race: Boolean(formData.correctly_reported_race),
         
         // Notes
         notes: formData.notes || "",
+        validation_errors: formData.validation_errors || "",
         beneficiary_status: formData.beneficiary_status || "Current"
       };
+
+      console.log("Sending data to backend:", dataToSend);
 
       const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`,
@@ -544,29 +370,24 @@ const Beneficiaries = () => {
         {
           headers: {
             'Content-Type': 'application/json'
-          },
-          timeout: 10000
+          }
         }
       );
 
+      console.log("Beneficiary added successfully:", response.data);
       showSnackbar("Beneficiary added successfully!");
       setOpenDialog(false);
       resetForm();
       fetchProjectAndBeneficiaries();
     } catch (err) {
       console.error("Error adding beneficiary:", err);
-      let errorMessage = "Failed to add beneficiary. ";
+      console.error("Error response:", err.response?.data);
       
+      let errorMessage = "Failed to add beneficiary. ";
       if (err.response?.data?.error) {
-        if (err.response.data.error.includes("ID number already exists")) {
-          errorMessage = "ID number already exists in the system.";
-        } else {
-          errorMessage += err.response.data.error;
-        }
-      } else if (err.response?.status === 500) {
-        errorMessage += "Internal server error.";
-      } else if (err.message) {
-        errorMessage += err.message;
+        errorMessage += err.response.data.error;
+      } else if (err.response?.status === 409) {
+        errorMessage = "ID number already exists in the system";
       }
       
       showSnackbar(errorMessage, "error");
@@ -577,27 +398,15 @@ const Beneficiaries = () => {
     try {
       if (!selectedBeneficiary) return;
 
-      // Validate form
-      const errors = validateForm();
-      if (errors.length > 0) {
-        showSnackbar(errors.join(", "), "error");
+      // Validate required fields
+      if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()) {
+        showSnackbar("First name, last name, and ID number are required", "error");
         return;
       }
 
-      // Upload documents if new ones are added
-      let documentsUpdated = {};
-      if (idDocument || qualificationDocument) {
-        setIsUploading(true);
-        documentsUpdated = await uploadDocuments();
-        setIsUploading(false);
-      }
-
-      // Prepare update data
       const updateData = {
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
-        learner_names: formData.first_name.trim(),
-        learner_surname: formData.last_name.trim(),
         id_number: formData.id_number.trim(),
         gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
@@ -606,21 +415,11 @@ const Beneficiaries = () => {
         email: formData.email_address || "",
         residential_area: formData.residential_area || "",
         learner_province: formData.learner_province || "",
-        learner_district_municipality: formData.learner_district_municipality || "",
+        learner_municipality: formData.learner_district_municipality || "",
         disability: Boolean(formData.disability),
         youth: Boolean(formData.youth),
-        non_rsa_citizen: Boolean(formData.non_rsa_citizen),
-        beneficiary_status: formData.beneficiary_status || "Current",
-        status: formData.status || "Active"
+        non_rsa_citizen: Boolean(formData.non_rsa_citizen)
       };
-
-      // Add document URLs if uploaded
-      if (documentsUpdated.id_document_url) {
-        updateData.id_document_url = documentsUpdated.id_document_url;
-      }
-      if (documentsUpdated.qualification_document_url) {
-        updateData.qualification_document_url = documentsUpdated.qualification_document_url;
-      }
 
       const response = await axios.put(
         `${API_BASE}/api/beneficiaries/${selectedBeneficiary.id}`,
@@ -673,83 +472,24 @@ const Beneficiaries = () => {
   const handleEditClick = () => {
     if (!selectedBeneficiary) return;
 
-    // Load beneficiary details
-    setFormData({
+    // For editing, populate the form with existing data
+    setFormData(prev => ({
+      ...prev,
       first_name: selectedBeneficiary.first_name || "",
       last_name: selectedBeneficiary.last_name || "",
-      initials: selectedBeneficiary.initials || "",
       id_number: selectedBeneficiary.id_number || "",
-      date_of_birth: selectedBeneficiary.date_of_birth || "",
       gender: selectedBeneficiary.gender || "",
-      race: selectedBeneficiary.race || "",
       age: selectedBeneficiary.age || "",
-      home_language: selectedBeneficiary.home_language || "English",
+      race: selectedBeneficiary.race || "",
       mobile_phone: selectedBeneficiary.mobile_phone || "",
       email_address: selectedBeneficiary.email || "",
-      parent_guardian_mobile: selectedBeneficiary.parent_guardian_mobile || "",
-      parent_guardian_email: selectedBeneficiary.parent_guardian_email || "",
-      youth: selectedBeneficiary.youth || true,
-      disability: selectedBeneficiary.disability || false,
-      disability_type: selectedBeneficiary.disability_type || "",
-      non_rsa_citizen: selectedBeneficiary.non_rsa_citizen || false,
+      residential_area: selectedBeneficiary.residential_area || "",
       learner_province: selectedBeneficiary.learner_province || "",
       learner_district_municipality: selectedBeneficiary.learner_municipality || "",
-      learner_local_municipality: selectedBeneficiary.learner_local_municipality || "",
-      residential_area: selectedBeneficiary.residential_area || "",
-      area_type: selectedBeneficiary.area_type || "",
-      type_of_learning_programme: selectedBeneficiary.learning_programme_type || "Training",
-      programme_start_date: selectedBeneficiary.programme_start_date || new Date().toISOString().split('T')[0],
-      programme_completion_date: selectedBeneficiary.programme_completion_date || "",
-      certificate_issue_date: selectedBeneficiary.certificate_issue_date || "",
-      programme_outcome: selectedBeneficiary.programme_outcome || "",
-      status: selectedBeneficiary.status || "Active",
-      ofo_code: selectedBeneficiary.ofo_code || "",
-      nqf_level: selectedBeneficiary.nqf_level || "",
-      qualification_id: selectedBeneficiary.qualification_id || "",
-      programme_description: selectedBeneficiary.programme_description || "",
-      learnership_id: selectedBeneficiary.learnership_id || "",
-      unit_standard_id: selectedBeneficiary.unit_standard_id || "",
-      employer_name: selectedBeneficiary.employer_name || "",
-      employer_sdl_number: selectedBeneficiary.employer_sdl_number || "",
-      employer_contact_details: selectedBeneficiary.employer_contact_details || "",
-      training_provider_name: selectedBeneficiary.training_provider_name || "",
-      training_provider_sdl_number: selectedBeneficiary.training_provider_sdl_number || "",
-      training_provider_contact_details: selectedBeneficiary.training_provider_contact_details || "",
-      training_provider_type: selectedBeneficiary.training_provider_type || "",
-      training_provider_province: selectedBeneficiary.training_provider_province || "",
-      training_provider_code: selectedBeneficiary.training_provider_code || "",
-      training_provider_etqa_id: selectedBeneficiary.training_provider_etqa_id || "",
-      training_provider_postal_address: selectedBeneficiary.training_provider_postal_address || "",
-      training_provider_physical_address: selectedBeneficiary.training_provider_physical_address || "",
-      seta_industry_funded: selectedBeneficiary.seta_industry_funded || false,
-      amount_spent_per_learner: selectedBeneficiary.amount_spent_per_learner || "0",
-      agreement_moa_number: selectedBeneficiary.agreement_moa_number || "",
-      project_number: selectedBeneficiary.project_number || "",
-      activity_number: selectedBeneficiary.activity_number || "",
-      app_sub_programme: selectedBeneficiary.app_sub_programme || "",
-      last_school_emis: selectedBeneficiary.last_school_emis || "",
-      last_school_year: selectedBeneficiary.last_school_year || "",
-      non_nqf_intervention_subfield: selectedBeneficiary.non_nqf_intervention_subfield || "",
-      non_nqf_intervention_status: selectedBeneficiary.non_nqf_intervention_status || "",
-      non_nqf_intervention_credit: selectedBeneficiary.non_nqf_intervention_credit || "",
-      employment_status: selectedBeneficiary.employment_status || "",
-      current_employer: selectedBeneficiary.current_employer || "",
-      monthly_income: selectedBeneficiary.monthly_income || "0",
-      skills: selectedBeneficiary.skills || "",
-      notes: selectedBeneficiary.notes || "",
-      beneficiary_status: selectedBeneficiary.beneficiary_status || "Current",
-      id_document_url: selectedBeneficiary.id_document_url || "",
-      qualification_document_url: selectedBeneficiary.qualification_document_url || ""
-    });
-
-    // Set existing documents
-    setExistingDocuments({
-      id_document_url: selectedBeneficiary.id_document_url || "",
-      qualification_document_url: selectedBeneficiary.qualification_document_url || ""
-    });
-
-    setIdDocument(null);
-    setQualificationDocument(null);
+      disability: selectedBeneficiary.disability || false,
+      youth: selectedBeneficiary.youth || false,
+      non_rsa_citizen: selectedBeneficiary.non_rsa_citizen || false,
+    }));
     
     setIsEdit(true);
     setOpenDialog(true);
@@ -763,11 +503,6 @@ const Beneficiaries = () => {
     handleMenuClose();
   };
 
-  const handleViewClick = (beneficiary) => {
-    setSelectedBeneficiary(beneficiary);
-    setOpenViewDialog(true);
-  };
-
   const handleSave = () => {
     if (isEdit) {
       handleUpdateBeneficiary();
@@ -776,42 +511,16 @@ const Beneficiaries = () => {
     }
   };
 
-  const getFileNameFromUrl = (url) => {
-    if (!url) return null;
-    const parts = url.split('/');
-    return parts[parts.length - 1];
-  };
-
-  const getFileIcon = (fileName) => {
-    if (!fileName) return <InsertDriveFileIcon />;
-    if (fileName.toLowerCase().endsWith('.pdf')) return <PictureAsPdfIcon />;
-    if (fileName.toLowerCase().endsWith('.jpg') || 
-        fileName.toLowerCase().endsWith('.jpeg') || 
-        fileName.toLowerCase().endsWith('.png')) return <ImageIcon />;
-    return <InsertDriveFileIcon />;
-  };
-
-  const handleViewDocument = (url) => {
-    if (url) {
-      window.open(url, '_blank');
-    }
-  };
-
-  const handleDownloadDocument = (url) => {
-    if (url) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = getFileNameFromUrl(url) || 'document';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
   // Tab panel component
-  const TabPanel = ({ children, value, index }) => {
+  const TabPanel = ({ children, value, index, ...other }) => {
     return (
-      <div hidden={value !== index}>
+      <div
+        role="tabpanel"
+        hidden={value !== index}
+        id={`beneficiary-tabpanel-${index}`}
+        aria-labelledby={`beneficiary-tab-${index}`}
+        {...other}
+      >
         {value === index && (
           <Box sx={{ p: 3 }}>
             {children}
@@ -819,19 +528,6 @@ const Beneficiaries = () => {
         )}
       </div>
     );
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
   };
 
   if (loading) {
@@ -894,7 +590,7 @@ const Beneficiaries = () => {
         </Button>
       </Box>
 
-      {/* BENEFICIARIES GRID */}
+      {/* BENEFICIARIES GRID (Same as before) */}
       {beneficiaries.length === 0 ? (
         <Paper sx={{ p: 6, textAlign: "center", mt: 4, borderRadius: 3 }}>
           <PersonIcon sx={{ fontSize: 80, color: "text.secondary", mb: 3, opacity: 0.7 }} />
@@ -921,19 +617,15 @@ const Beneficiaries = () => {
         <Grid container spacing={3}>
           {beneficiaries.map((beneficiary) => (
             <Grid item xs={12} sm={6} md={4} key={beneficiary.id}>
-              <Card 
-                sx={{ 
-                  height: "100%", 
-                  position: "relative", 
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer',
-                  '&:hover': { 
-                    boxShadow: 6,
-                    transform: 'translateY(-4px)'
-                  }
-                }}
-                onClick={() => handleViewClick(beneficiary)}
-              >
+              <Card sx={{ 
+                height: "100%", 
+                position: "relative", 
+                transition: 'all 0.3s ease',
+                '&:hover': { 
+                  boxShadow: 6,
+                  transform: 'translateY(-4px)'
+                }
+              }}>
                 <IconButton
                   sx={{ 
                     position: "absolute", 
@@ -945,10 +637,7 @@ const Beneficiaries = () => {
                       bgcolor: 'action.hover'
                     }
                   }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMenuOpen(e, beneficiary);
-                  }}
+                  onClick={(e) => handleMenuOpen(e, beneficiary)}
                 >
                   <MoreVertIcon />
                 </IconButton>
@@ -957,11 +646,7 @@ const Beneficiaries = () => {
                   <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
                     <Avatar 
                       sx={{ 
-                        bgcolor: 
-                          beneficiary.beneficiary_status === 'Former' ? 'grey.500' :
-                          beneficiary.status === 'Completed' ? 'success.main' :
-                          beneficiary.status === 'Active' ? 'primary.main' :
-                          'warning.main', 
+                        bgcolor: "primary.main", 
                         mr: 2, 
                         width: 56, 
                         height: 56,
@@ -978,23 +663,6 @@ const Beneficiaries = () => {
                       <Typography variant="body2" color="text.secondary">
                         ID: {beneficiary.id_number || "N/A"}
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                        <Chip 
-                          label={beneficiary.beneficiary_status || "Current"} 
-                          size="small" 
-                          color={beneficiary.beneficiary_status === 'Former' ? 'default' : 'primary'}
-                          variant="outlined"
-                        />
-                        <Chip 
-                          label={beneficiary.status || "Active"} 
-                          size="small" 
-                          color={
-                            beneficiary.status === 'Active' ? 'success' :
-                            beneficiary.status === 'Completed' ? 'primary' :
-                            'warning'
-                          }
-                        />
-                      </Box>
                     </Box>
                   </Box>
 
@@ -1038,83 +706,26 @@ const Beneficiaries = () => {
                         </Typography>
                       </Box>
                     )}
-
-                    {beneficiary.learner_province && (
-                      <Box sx={{ display: "flex", alignItems: "center" }}>
-                        <LocationOnIcon sx={{ mr: 1.5, fontSize: 20, color: "primary.main" }} />
-                        <Typography variant="body2">
-                          {beneficiary.learner_province}
-                        </Typography>
-                      </Box>
-                    )}
                   </Stack>
                   
-                  <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {beneficiary.disability && (
-                      <Tooltip title={beneficiary.disability_type || "Disability"}>
-                        <Chip 
-                          icon={<AccessibleIcon />}
-                          label="Disability" 
-                          size="small" 
-                          color="secondary" 
-                          variant="outlined"
-                        />
-                      </Tooltip>
-                    )}
-                    {beneficiary.youth && (
-                      <Chip 
-                        label="Youth" 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined"
-                      />
-                    )}
-                    {beneficiary.non_rsa_citizen && (
-                      <Chip 
-                        icon={<PublicIcon />}
-                        label="Non-RSA" 
-                        size="small" 
-                        color="warning" 
-                        variant="outlined"
-                      />
-                    )}
-                    {beneficiary.race && (
-                      <Chip 
-                        label={beneficiary.race}
-                        size="small" 
-                        color="default"
-                        variant="outlined"
-                      />
-                    )}
-                  </Box>
-                  
-                  {/* Document indicators */}
-                  {(beneficiary.id_document_url || beneficiary.qualification_document_url) && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                      <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
-                        Documents:
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        {beneficiary.id_document_url && (
-                          <Chip
-                            icon={<BadgeIcon />}
-                            label="ID Document"
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
-                        )}
-                        {beneficiary.qualification_document_url && (
-                          <Chip
-                            icon={<DescriptionIcon />}
-                            label="Qualification"
-                            size="small"
-                            color="info"
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    </Box>
+                  {beneficiary.created_at && (
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary" 
+                      sx={{ 
+                        display: "block", 
+                        mt: 3, 
+                        pt: 2, 
+                        borderTop: 1, 
+                        borderColor: 'divider' 
+                      }}
+                    >
+                      Added: {new Date(beneficiary.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </Typography>
                   )}
                 </CardContent>
               </Card>
@@ -1123,125 +734,127 @@ const Beneficiaries = () => {
         </Grid>
       )}
 
-      {/* ADD/EDIT DIALOG */}
+      {/* ADD/EDIT DIALOG WITH TABS */}
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
         fullWidth 
         maxWidth="lg"
         scroll="paper"
-        PaperProps={{
-          sx: { maxHeight: '90vh' }
-        }}
       >
-        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2, bgcolor: 'primary.main', color: 'white' }}>
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           <Box>
             <Typography variant="h6" component="div" fontWeight="bold">
               {isEdit ? "Edit Beneficiary" : "Add New Beneficiary"}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9 }}>
+            <Typography variant="body2" color="text.secondary">
               Project: {projectTitle}
             </Typography>
           </Box>
         </DialogTitle>
         
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={(e, newValue) => setActiveTab(newValue)}
-            aria-label="beneficiary form tabs"
-            variant="fullWidth"
-          >
+          <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
             <Tab label="Personal Info" />
-            <Tab label="Documents" />
-            <Tab label="Programme" />
-            <Tab label="Employment" />
-            <Tab label="Additional" />
+            <Tab label="Contact & Address" />
+            <Tab label="Programme Details" />
+            <Tab label="Employment & Training" />
+            <Tab label="Financial & Other" />
           </Tabs>
         </Box>
         
-        <DialogContent dividers sx={{ p: 0, bgcolor: 'background.default' }}>
+        <DialogContent dividers sx={{ p: 0 }}>
           {/* TAB 1: Personal Information */}
           <TabPanel value={activeTab} index={0}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="First Name *"
+                  name="first_name"
                   value={formData.first_name}
-                  onChange={(e) => handleInputChange("first_name", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  variant="outlined"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <PersonIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+                  error={!formData.first_name.trim()}
+                  helperText={!formData.first_name.trim() ? "Required" : ""}
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="Last Name *"
+                  name="last_name"
                   value={formData.last_name}
-                  onChange={(e) => handleInputChange("last_name", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  variant="outlined"
+                  error={!formData.last_name.trim()}
+                  helperText={!formData.last_name.trim() ? "Required" : ""}
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
+                <TextField
+                  label="Initials"
+                  name="initials"
+                  value={formData.initials}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="ID Number *"
+                  name="id_number"
                   value={formData.id_number}
-                  onChange={(e) => handleInputChange("id_number", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  variant="outlined"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <BadgeIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+                  error={!formData.id_number.trim()}
+                  helperText="13-digit South African ID"
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
-                  label="Age"
-                  type="number"
-                  value={formData.age}
-                  onChange={(e) => handleInputChange("age", e.target.value)}
+                  label="Date of Birth"
+                  name="date_of_birth"
+                  type="date"
+                  value={formData.date_of_birth}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
-                  helperText="Must be between 0 and 120"
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">years</InputAdornment>
-                    ),
-                  }}
+                  InputLabelProps={{ shrink: true }}
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth size="small" required>
+              <Grid item xs={12} sm={6} md={4}>
+                <TextField
+                  label="Age"
+                  name="age"
+                  type="number"
+                  value={formData.age}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={4}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Gender *</InputLabel>
                   <Select
+                    name="gender"
                     value={formData.gender}
-                    onChange={(e) => handleInputChange("gender", e.target.value)}
+                    onChange={handleInputChange}
                     label="Gender *"
-                    variant="outlined"
                   >
-                    <MenuItem value="">Select Gender</MenuItem>
+                    <MenuItem value=""><em>Select Gender</em></MenuItem>
                     <MenuItem value="Male">Male</MenuItem>
                     <MenuItem value="Female">Female</MenuItem>
                     <MenuItem value="Other">Other</MenuItem>
@@ -1249,16 +862,16 @@ const Beneficiaries = () => {
                 </FormControl>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Race</InputLabel>
                   <Select
+                    name="race"
                     value={formData.race}
-                    onChange={(e) => handleInputChange("race", e.target.value)}
+                    onChange={handleInputChange}
                     label="Race"
-                    variant="outlined"
                   >
-                    <MenuItem value="">Select Race</MenuItem>
+                    <MenuItem value=""><em>Select Race</em></MenuItem>
                     <MenuItem value="African">African</MenuItem>
                     <MenuItem value="Coloured">Coloured</MenuItem>
                     <MenuItem value="Indian">Indian</MenuItem>
@@ -1268,239 +881,57 @@ const Beneficiaries = () => {
                 </FormControl>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Date of Birth"
-                  type="date"
-                  value={formData.date_of_birth}
-                  onChange={(e) => handleInputChange("date_of_birth", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Home Language</InputLabel>
                   <Select
+                    name="home_language"
                     value={formData.home_language}
-                    onChange={(e) => handleInputChange("home_language", e.target.value)}
+                    onChange={handleInputChange}
                     label="Home Language"
-                    variant="outlined"
                   >
-                    {languages.map((lang) => (
-                      <MenuItem key={lang} value={lang}>{lang}</MenuItem>
-                    ))}
+                    <MenuItem value="English">English</MenuItem>
+                    <MenuItem value="Afrikaans">Afrikaans</MenuItem>
+                    <MenuItem value="isiZulu">isiZulu</MenuItem>
+                    <MenuItem value="isiXhosa">isiXhosa</MenuItem>
+                    <MenuItem value="Sesotho">Sesotho</MenuItem>
+                    <MenuItem value="Setswana">Setswana</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Initials"
-                  value={formData.initials}
-                  onChange={(e) => handleInputChange("initials", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Beneficiary Status</InputLabel>
-                  <Select
-                    value={formData.beneficiary_status}
-                    onChange={(e) => handleInputChange("beneficiary_status", e.target.value)}
-                    label="Beneficiary Status"
-                    variant="outlined"
-                  >
-                    <MenuItem value="Current">Current</MenuItem>
-                    <MenuItem value="Former">Former</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-            
-            <Divider sx={{ my: 3 }} />
-            
-            <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-              Contact Information
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Mobile Phone"
-                  value={formData.mobile_phone}
-                  onChange={(e) => handleInputChange("mobile_phone", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <PhoneIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Email"
-                  type="email"
-                  value={formData.email_address}
-                  onChange={(e) => handleInputChange("email_address", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <EmailIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Parent/Guardian Mobile"
-                  value={formData.parent_guardian_mobile}
-                  onChange={(e) => handleInputChange("parent_guardian_mobile", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Parent/Guardian Email"
-                  value={formData.parent_guardian_email}
-                  onChange={(e) => handleInputChange("parent_guardian_email", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-            </Grid>
-            
-            <Divider sx={{ my: 3 }} />
-            
-            <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-              Address Information
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Province</InputLabel>
-                  <Select
-                    value={formData.learner_province}
-                    onChange={(e) => handleInputChange("learner_province", e.target.value)}
-                    label="Province"
-                    variant="outlined"
-                  >
-                    <MenuItem value="">Select Province</MenuItem>
-                    {provinces.map((province) => (
-                      <MenuItem key={province} value={province}>{province}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="District Municipality"
-                  value={formData.learner_district_municipality}
-                  onChange={(e) => handleInputChange("learner_district_municipality", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Local Municipality"
-                  value={formData.learner_local_municipality}
-                  onChange={(e) => handleInputChange("learner_local_municipality", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Area Type</InputLabel>
-                  <Select
-                    value={formData.area_type}
-                    onChange={(e) => handleInputChange("area_type", e.target.value)}
-                    label="Area Type"
-                    variant="outlined"
-                  >
-                    <MenuItem value="">Select Area Type</MenuItem>
-                    <MenuItem value="Urban">Urban</MenuItem>
-                    <MenuItem value="Rural">Rural</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Residential Area"
-                  value={formData.residential_area}
-                  onChange={(e) => handleInputChange("residential_area", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-            </Grid>
-            
-            <Divider sx={{ my: 3 }} />
-            
-            <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-              Demographic Information
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={4}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.youth}
-                      onChange={(e) => handleInputChange("youth", e.target.checked)}
+                      onChange={handleInputChange}
+                      name="youth"
                       color="primary"
                     />
                   }
                   label="Youth (18-35 years)"
                 />
-              </Grid>
-              
-              <Grid item xs={12} sm={4}>
+                
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.disability}
-                      onChange={(e) => handleInputChange("disability", e.target.checked)}
+                      onChange={handleInputChange}
+                      name="disability"
                       color="primary"
                     />
                   }
                   label="Person with Disability"
                 />
-              </Grid>
-              
-              <Grid item xs={12} sm={4}>
+                
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={formData.non_rsa_citizen}
-                      onChange={(e) => handleInputChange("non_rsa_citizen", e.target.checked)}
+                      onChange={handleInputChange}
+                      name="non_rsa_citizen"
                       color="primary"
                     />
                   }
@@ -1512,239 +943,182 @@ const Beneficiaries = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Disability Type"
+                    name="disability_type"
                     value={formData.disability_type}
-                    onChange={(e) => handleInputChange("disability_type", e.target.value)}
+                    onChange={handleInputChange}
                     fullWidth
                     size="small"
-                    variant="outlined"
                   />
                 </Grid>
               )}
             </Grid>
           </TabPanel>
           
-          {/* TAB 2: Document Upload */}
+          {/* TAB 2: Contact & Address */}
           <TabPanel value={activeTab} index={1}>
-            <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-              Upload Documents
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Upload ID document and qualification documents. Supported formats: JPG, PNG, PDF (Max 5MB each)
-            </Typography>
-            
-            {isUploading && (
-              <Box sx={{ mb: 3 }}>
-                <LinearProgress variant="determinate" value={uploadProgress} />
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Uploading... {uploadProgress}%
-                </Typography>
-              </Box>
-            )}
-            
-            <Grid container spacing={3}>
-              {/* ID Document Upload */}
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, height: '100%' }}>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                    ID Document
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" paragraph>
-                    Upload a copy of ID document, passport, or birth certificate
-                  </Typography>
-                  
-                  <Box sx={{ mb: 2 }}>
-                    <Button
-                      variant="outlined"
-                      component="label"
-                      startIcon={<UploadFileIcon />}
-                      fullWidth
-                      sx={{ mb: 2 }}
-                    >
-                      Upload ID Document
-                      <input
-                        type="file"
-                        hidden
-                        accept=".jpg,.jpeg,.png,.pdf"
-                        onChange={(e) => handleFileUpload(e, 'id')}
-                      />
-                    </Button>
-                    
-                    {idDocument && (
-                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'success.light', color: 'success.dark' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getFileIcon(idDocument.name)}
-                            <Typography variant="body2" noWrap>
-                              {idDocument.name}
-                            </Typography>
-                          </Box>
-                          <IconButton
-                            size="small"
-                            onClick={() => removeDocument('id')}
-                            sx={{ color: 'error.main' }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-                          Size: {(idDocument.size / 1024 / 1024).toFixed(2)} MB
-                        </Typography>
-                      </Paper>
-                    )}
-                    
-                    {!idDocument && existingDocuments.id_document_url && (
-                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'info.light', color: 'info.dark' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getFileIcon(getFileNameFromUrl(existingDocuments.id_document_url))}
-                            <Typography variant="body2">
-                              Existing ID Document
-                            </Typography>
-                          </Box>
-                          <Box>
-                            <Tooltip title="View">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewDocument(existingDocuments.id_document_url)}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDownloadDocument(existingDocuments.id_document_url)}
-                              >
-                                <DownloadIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </Box>
-                      </Paper>
-                    )}
-                  </Box>
-                </Paper>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Mobile Phone"
+                  name="mobile_phone"
+                  value={formData.mobile_phone}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
               </Grid>
               
-              {/* Qualification Document Upload */}
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, height: '100%' }}>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                    Qualification Document
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" paragraph>
-                    Upload qualification certificates, diplomas, or transcripts
-                  </Typography>
-                  
-                  <Box sx={{ mb: 2 }}>
-                    <Button
-                      variant="outlined"
-                      component="label"
-                      startIcon={<UploadFileIcon />}
-                      fullWidth
-                      sx={{ mb: 2 }}
-                    >
-                      Upload Qualification Document
-                      <input
-                        type="file"
-                        hidden
-                        accept=".jpg,.jpeg,.png,.pdf"
-                        onChange={(e) => handleFileUpload(e, 'qualification')}
-                      />
-                    </Button>
-                    
-                    {qualificationDocument && (
-                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'success.light', color: 'success.dark' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getFileIcon(qualificationDocument.name)}
-                            <Typography variant="body2" noWrap>
-                              {qualificationDocument.name}
-                            </Typography>
-                          </Box>
-                          <IconButton
-                            size="small"
-                            onClick={() => removeDocument('qualification')}
-                            sx={{ color: 'error.main' }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-                          Size: {(qualificationDocument.size / 1024 / 1024).toFixed(2)} MB
-                        </Typography>
-                      </Paper>
-                    )}
-                    
-                    {!qualificationDocument && existingDocuments.qualification_document_url && (
-                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'info.light', color: 'info.dark' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getFileIcon(getFileNameFromUrl(existingDocuments.qualification_document_url))}
-                            <Typography variant="body2">
-                              Existing Qualification Document
-                            </Typography>
-                          </Box>
-                          <Box>
-                            <Tooltip title="View">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewDocument(existingDocuments.qualification_document_url)}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDownloadDocument(existingDocuments.qualification_document_url)}
-                              >
-                                <DownloadIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </Box>
-                      </Paper>
-                    )}
-                  </Box>
-                </Paper>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Email"
+                  name="email_address"
+                  type="email"
+                  value={formData.email_address}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Guardian Mobile"
+                  name="parent_guardian_mobile"
+                  value={formData.parent_guardian_mobile}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Guardian Email"
+                  name="parent_guardian_email"
+                  type="email"
+                  value={formData.parent_guardian_email}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
               </Grid>
               
               <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Document Requirements
-                  </Typography>
-                  <List dense>
-                    <ListItem>
-                      <ListItemIcon>
-                        <PictureAsPdfIcon color="error" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Accepted formats: JPG, PNG, PDF" 
-                        secondary="Maximum file size: 5MB per document"
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon>
-                        <BadgeIcon color="primary" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="ID Document" 
-                        secondary="Valid ID, passport, or birth certificate"
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon>
-                        <DescriptionIcon color="primary" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Qualification Document" 
-                        secondary="Certificates, diplomas, transcripts, or proof of qualification"
-                      />
-                    </ListItem>
-                  </List>
-                </Paper>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  Residential Address
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Province"
+                  name="learner_province"
+                  value={formData.learner_province}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="District Municipality"
+                  name="learner_district_municipality"
+                  value={formData.learner_district_municipality}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Local Municipality"
+                  name="learner_local_municipality"
+                  value={formData.learner_local_municipality}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Residential Area"
+                  name="residential_area"
+                  value={formData.residential_area}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Area Type</InputLabel>
+                  <Select
+                    name="area_type"
+                    value={formData.area_type}
+                    onChange={handleInputChange}
+                    label="Area Type"
+                  >
+                    <MenuItem value=""><em>Select Area Type</em></MenuItem>
+                    <MenuItem value="Urban">Urban</MenuItem>
+                    <MenuItem value="Rural">Rural</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  Physical Address
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Address Line 1"
+                  name="physical_address_line1"
+                  value={formData.physical_address_line1}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Address Line 2"
+                  name="physical_address_line2"
+                  value={formData.physical_address_line2}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Postal Code"
+                  name="postal_code"
+                  value={formData.postal_code}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Address Code"
+                  name="physical_address_code"
+                  value={formData.physical_address_code}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
               </Grid>
             </Grid>
           </TabPanel>
@@ -1752,26 +1126,19 @@ const Beneficiaries = () => {
           {/* TAB 3: Programme Details */}
           <TabPanel value={activeTab} index={2}>
             <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-                  Programme Information
-                </Typography>
-              </Grid>
-              
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Programme Type</InputLabel>
+                  <InputLabel>Learning Programme Type</InputLabel>
                   <Select
+                    name="type_of_learning_programme"
                     value={formData.type_of_learning_programme}
-                    onChange={(e) => handleInputChange("type_of_learning_programme", e.target.value)}
-                    label="Programme Type"
-                    variant="outlined"
+                    onChange={handleInputChange}
+                    label="Learning Programme Type"
                   >
                     <MenuItem value="Training">Training</MenuItem>
                     <MenuItem value="Workshop">Workshop</MenuItem>
+                    <MenuItem value="Seminar">Seminar</MenuItem>
                     <MenuItem value="Course">Course</MenuItem>
-                    <MenuItem value="Learnership">Learnership</MenuItem>
-                    <MenuItem value="Internship">Internship</MenuItem>
                     <MenuItem value="Other">Other</MenuItem>
                   </Select>
                 </FormControl>
@@ -1781,10 +1148,10 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
                   <Select
+                    name="status"
                     value={formData.status}
-                    onChange={(e) => handleInputChange("status", e.target.value)}
+                    onChange={handleInputChange}
                     label="Status"
-                    variant="outlined"
                   >
                     <MenuItem value="Active">Active</MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
@@ -1798,12 +1165,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Programme Start Date"
+                  name="programme_start_date"
                   type="date"
                   value={formData.programme_start_date}
-                  onChange={(e) => handleInputChange("programme_start_date", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1811,12 +1178,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Programme Completion Date"
+                  name="programme_completion_date"
                   type="date"
                   value={formData.programme_completion_date}
-                  onChange={(e) => handleInputChange("programme_completion_date", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1824,12 +1191,12 @@ const Beneficiaries = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Certificate Issue Date"
+                  name="certificate_issue_date"
                   type="date"
                   value={formData.certificate_issue_date}
-                  onChange={(e) => handleInputChange("certificate_issue_date", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1838,12 +1205,12 @@ const Beneficiaries = () => {
                 <FormControl fullWidth size="small">
                   <InputLabel>Programme Outcome</InputLabel>
                   <Select
+                    name="programme_outcome"
                     value={formData.programme_outcome}
-                    onChange={(e) => handleInputChange("programme_outcome", e.target.value)}
+                    onChange={handleInputChange}
                     label="Programme Outcome"
-                    variant="outlined"
                   >
-                    <MenuItem value="">Select Outcome</MenuItem>
+                    <MenuItem value=""><em>Select Outcome</em></MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
                     <MenuItem value="In Progress">In Progress</MenuItem>
                     <MenuItem value="Certified">Certified</MenuItem>
@@ -1852,116 +1219,60 @@ const Beneficiaries = () => {
                 </FormControl>
               </Grid>
               
-              <Divider sx={{ my: 2, width: '100%' }} />
-              
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-                  Qualification Information
-                </Typography>
-              </Grid>
-              
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="OFO Code"
+                  name="ofo_code"
                   value={formData.ofo_code}
-                  onChange={(e) => handleInputChange("ofo_code", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>NQF Level</InputLabel>
-                  <Select
-                    value={formData.nqf_level}
-                    onChange={(e) => handleInputChange("nqf_level", e.target.value)}
-                    label="NQF Level"
-                    variant="outlined"
-                  >
-                    <MenuItem value="">Select NQF Level</MenuItem>
-                    {nqfLevels.map((level) => (
-                      <MenuItem key={level} value={level}>NQF {level}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  label="NQF Level"
+                  name="nqf_level"
+                  value={formData.nqf_level}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Qualification ID"
+                  name="qualification_id"
                   value={formData.qualification_id}
-                  onChange={(e) => handleInputChange("qualification_id", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Learnership ID"
+                  name="learnership_id"
                   value={formData.learnership_id}
-                  onChange={(e) => handleInputChange("learnership_id", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Unit Standard ID"
-                  value={formData.unit_standard_id}
-                  onChange={(e) => handleInputChange("unit_standard_id", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   label="Programme Description"
+                  name="programme_description"
                   value={formData.programme_description}
-                  onChange={(e) => handleInputChange("programme_description", e.target.value)}
+                  onChange={handleInputChange}
                   fullWidth
                   multiline
                   rows={3}
                   size="small"
-                  variant="outlined"
-                  placeholder="Describe the programme, qualification, or training"
-                />
-              </Grid>
-              
-              <Divider sx={{ my: 2, width: '100%' }} />
-              
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-                  School Information
-                </Typography>
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Last School EMIS Number"
-                  value={formData.last_school_emis}
-                  onChange={(e) => handleInputChange("last_school_emis", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Last School Year"
-                  value={formData.last_school_year}
-                  onChange={(e) => handleInputChange("last_school_year", e.target.value)}
-                  fullWidth
-                  size="small"
-                  variant="outlined"
                 />
               </Grid>
             </Grid>
@@ -1969,20 +1280,366 @@ const Beneficiaries = () => {
           
           {/* TAB 4: Employment & Training */}
           <TabPanel value={activeTab} index={3}>
-            {/* ... (same as before, keep this tab content) ... */}
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  Employment Information
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Employment Status</InputLabel>
+                  <Select
+                    name="employment_status"
+                    value={formData.employment_status}
+                    onChange={handleInputChange}
+                    label="Employment Status"
+                  >
+                    <MenuItem value=""><em>Select Status</em></MenuItem>
+                    <MenuItem value="Employed">Employed</MenuItem>
+                    <MenuItem value="Unemployed">Unemployed</MenuItem>
+                    <MenuItem value="Self-Employed">Self-Employed</MenuItem>
+                    <MenuItem value="Student">Student</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Current Employer"
+                  name="current_employer"
+                  value={formData.current_employer}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Employer Name"
+                  name="employer_name"
+                  value={formData.employer_name}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Employer SDL Number"
+                  name="employer_sdl_number"
+                  value={formData.employer_sdl_number}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Employer Contact Details"
+                  name="employer_contact_details"
+                  value={formData.employer_contact_details}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                  Training Provider Information
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider Name"
+                  name="training_provider_name"
+                  value={formData.training_provider_name}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider SDL Number"
+                  name="training_provider_sdl_number"
+                  value={formData.training_provider_sdl_number}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Provider Type</InputLabel>
+                  <Select
+                    name="training_provider_type"
+                    value={formData.training_provider_type}
+                    onChange={handleInputChange}
+                    label="Provider Type"
+                  >
+                    <MenuItem value=""><em>Select Type</em></MenuItem>
+                    <MenuItem value="Private">Private</MenuItem>
+                    <MenuItem value="Public">Public</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider Province"
+                  name="training_provider_province"
+                  value={formData.training_provider_province}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider Code"
+                  name="training_provider_code"
+                  value={formData.training_provider_code}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider ETQA ID"
+                  name="training_provider_etqa_id"
+                  value={formData.training_provider_etqa_id}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Training Provider Postal Address"
+                  name="training_provider_postal_address"
+                  value={formData.training_provider_postal_address}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Training Provider Physical Address"
+                  name="training_provider_physical_address"
+                  value={formData.training_provider_physical_address}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Training Provider Contact Details"
+                  name="training_provider_contact_details"
+                  value={formData.training_provider_contact_details}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Accreditation Start Date"
+                  name="training_provider_accreditation_start_date"
+                  type="date"
+                  value={formData.training_provider_accreditation_start_date}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            </Grid>
           </TabPanel>
           
-          {/* TAB 5: Additional Info */}
+          {/* TAB 5: Financial & Other */}
           <TabPanel value={activeTab} index={4}>
-            {/* ... (same as before, keep this tab content) ... */}
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.seta_industry_funded}
+                      onChange={handleInputChange}
+                      name="seta_industry_funded"
+                      color="primary"
+                    />
+                  }
+                  label="SETA Industry Funded"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Amount Spent per Learner"
+                  name="amount_spent_per_learner"
+                  type="number"
+                  value={formData.amount_spent_per_learner}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                  InputProps={{
+                    startAdornment: <Typography variant="body2" sx={{ mr: 1 }}>R</Typography>,
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Monthly Income"
+                  name="monthly_income"
+                  type="number"
+                  value={formData.monthly_income}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                  InputProps={{
+                    startAdornment: <Typography variant="body2" sx={{ mr: 1 }}>R</Typography>,
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Agreement/MOA Number"
+                  name="agreement_moa_number"
+                  value={formData.agreement_moa_number}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Project Number"
+                  name="project_number"
+                  value={formData.project_number}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Activity Number"
+                  name="activity_number"
+                  value={formData.activity_number}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="App Sub Programme"
+                  name="app_sub_programme"
+                  value={formData.app_sub_programme}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Unit Standard ID"
+                  name="unit_standard_id"
+                  value={formData.unit_standard_id}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Last School EMIS"
+                  name="last_school_emis"
+                  value={formData.last_school_emis}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Last School Year"
+                  name="last_school_year"
+                  value={formData.last_school_year}
+                  onChange={handleInputChange}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Skills"
+                  name="skills"
+                  value={formData.skills}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  label="Notes"
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  fullWidth
+                  multiline
+                  rows={3}
+                  size="small"
+                />
+              </Grid>
+            </Grid>
           </TabPanel>
         </DialogContent>
         
-        <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
           <Button onClick={() => setOpenDialog(false)} color="inherit">
             Cancel
           </Button>
-          <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
+          <Box sx={{ flexGrow: 1 }}>
             {activeTab > 0 && (
               <Button 
                 onClick={() => setActiveTab(activeTab - 1)}
@@ -1996,7 +1653,6 @@ const Beneficiaries = () => {
             <Button 
               onClick={() => setActiveTab(activeTab + 1)}
               variant="outlined"
-              color="primary"
             >
               Next
             </Button>
@@ -2005,191 +1661,12 @@ const Beneficiaries = () => {
               onClick={handleSave} 
               variant="contained" 
               color="warning"
-              disabled={!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim() || !formData.gender.trim() || isUploading}
+              disabled={!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()}
             >
-              {isUploading ? (
-                <>
-                  <CircularProgress size={20} sx={{ mr: 1 }} />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  {isEdit ? "Update" : "Save"} Beneficiary
-                </>
-              )}
+              {isEdit ? "Update" : "Save"} Beneficiary
             </Button>
           )}
         </DialogActions>
-      </Dialog>
-
-      {/* VIEW BENEFICIARY DETAILS DIALOG */}
-      <Dialog 
-        open={openViewDialog} 
-        onClose={() => setOpenViewDialog(false)} 
-        fullWidth 
-        maxWidth="md"
-        PaperProps={{
-          sx: { maxHeight: '90vh' }
-        }}
-      >
-        {selectedBeneficiary && (
-          <>
-            <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2, bgcolor: 'primary.main', color: 'white' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ 
-                  bgcolor: 'white',
-                  color: 'primary.main',
-                  width: 60,
-                  height: 60,
-                  fontSize: '1.8rem',
-                  fontWeight: 'bold'
-                }}>
-                  {selectedBeneficiary.first_name?.charAt(0)?.toUpperCase()}
-                </Avatar>
-                <Box>
-                  <Typography variant="h5" component="div" fontWeight="bold">
-                    {selectedBeneficiary.first_name} {selectedBeneficiary.last_name}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    ID: {selectedBeneficiary.id_number} • 
-                    Project: {projectTitle}
-                  </Typography>
-                </Box>
-              </Box>
-            </DialogTitle>
-            
-            <DialogContent dividers>
-              <Tabs value={0} variant="fullWidth" sx={{ mb: 3 }}>
-                <Tab label="Overview" />
-                <Tab label="Documents" />
-              </Tabs>
-              
-              {/* Overview Tab */}
-              <Box hidden={false}>
-                <Grid container spacing={3}>
-                  {/* ... (keep the overview content from before) ... */}
-                </Grid>
-              </Box>
-              
-              {/* Documents Tab */}
-              <Box hidden={true}>
-                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-                  Uploaded Documents
-                </Typography>
-                
-                <Grid container spacing={2} sx={{ mt: 2 }}>
-                  {/* ID Document */}
-                  <Grid item xs={12}>
-                    <Paper sx={{ p: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <BadgeIcon color="primary" />
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            ID Document
-                          </Typography>
-                        </Box>
-                        {selectedBeneficiary.id_document_url && (
-                          <Box>
-                            <Tooltip title="View Document">
-                              <IconButton
-                                onClick={() => handleViewDocument(selectedBeneficiary.id_document_url)}
-                                sx={{ mr: 1 }}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download Document">
-                              <IconButton
-                                onClick={() => handleDownloadDocument(selectedBeneficiary.id_document_url)}
-                              >
-                                <DownloadIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        )}
-                      </Box>
-                      
-                      {selectedBeneficiary.id_document_url ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                          {getFileIcon(getFileNameFromUrl(selectedBeneficiary.id_document_url))}
-                          <Typography variant="body2">
-                            {getFileNameFromUrl(selectedBeneficiary.id_document_url)}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                          No ID document uploaded
-                        </Typography>
-                      )}
-                    </Paper>
-                  </Grid>
-                  
-                  {/* Qualification Document */}
-                  <Grid item xs={12}>
-                    <Paper sx={{ p: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <DescriptionIcon color="primary" />
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            Qualification Document
-                          </Typography>
-                        </Box>
-                        {selectedBeneficiary.qualification_document_url && (
-                          <Box>
-                            <Tooltip title="View Document">
-                              <IconButton
-                                onClick={() => handleViewDocument(selectedBeneficiary.qualification_document_url)}
-                                sx={{ mr: 1 }}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download Document">
-                              <IconButton
-                                onClick={() => handleDownloadDocument(selectedBeneficiary.qualification_document_url)}
-                              >
-                                <DownloadIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        )}
-                      </Box>
-                      
-                      {selectedBeneficiary.qualification_document_url ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                          {getFileIcon(getFileNameFromUrl(selectedBeneficiary.qualification_document_url))}
-                          <Typography variant="body2">
-                            {getFileNameFromUrl(selectedBeneficiary.qualification_document_url)}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                          No qualification document uploaded
-                        </Typography>
-                      )}
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </Box>
-            </DialogContent>
-            
-            <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Button onClick={() => setOpenViewDialog(false)} color="inherit">
-                Close
-              </Button>
-              <Button 
-                onClick={() => {
-                  setOpenViewDialog(false);
-                  handleEditClick();
-                }}
-                variant="contained"
-                color="warning"
-              >
-                Edit Beneficiary
-              </Button>
-            </DialogActions>
-          </>
-        )}
       </Dialog>
 
       {/* MENU */}
