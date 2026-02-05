@@ -23,7 +23,7 @@ DB_CONFIG = {
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Create upload folder if it doesn't exist
@@ -48,6 +48,12 @@ def format_date(date_value):
     """Format date to string or return None"""
     if date_value:
         return date_value.strftime("%Y-%m-%d")
+    return None
+
+def format_boolean(value):
+    """Format boolean to string or return None"""
+    if value is not None:
+        return bool(value)
     return None
 
 # ================= PROJECTS ROUTES =================
@@ -168,8 +174,6 @@ def create_project():
                     filename = f"{timestamp}_{filename}"
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     file.save(filepath)
-                    # In production, you might want to upload to cloud storage
-                    # For local development, serve from uploads folder
                     project_image_url = f"http://localhost:5050/uploads/{filename}"
         else:
             # Handle JSON request (for backward compatibility)
@@ -341,10 +345,32 @@ def get_project_beneficiaries(project_id):
         
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, learner_names, learner_surname, id_number, gender, age, 
-                   mobile_phone, email_address, residential_area, learner_province,
-                   learner_district_municipality, disability, youth, non_rsa_citizen,
-                   race, status, created_at
+            SELECT id, learner_names, learner_surname, learner_initials, id_number, 
+                   date_of_birth, gender, race, youth, disability, disability_type,
+                   non_rsa_citizen, home_language, mobile_phone, email_address,
+                   type_of_learning_programme, programme_start_date, programme_completion_date,
+                   certificate_issue_date, ofo_code, nqf_level, programme_description,
+                   qualification_id, employer_name, employer_sdl_number, employer_contact_details,
+                   training_provider_name, training_provider_sdl_number, training_provider_contact_details,
+                   training_provider_type, training_provider_province, training_provider_code,
+                   training_provider_etqa_id, learner_province, learner_district_municipality,
+                   learner_local_municipality, residential_area, area_type, stats_area_code,
+                   physical_address_line1, physical_address_line2, physical_address_code,
+                   postal_address_line1, postal_address_line2, postal_code, seta_industry_funded,
+                   amount_spent_per_learner, agreement_moa_number, black_designated_groups,
+                   black_females, black_males, coloured_females, coloured_males, indian_females,
+                   indian_males, white_females, white_males, disabled_females, disabled_males,
+                   youth_females, youth_males, non_rsa_citizen_females, non_rsa_citizen_males,
+                   project_number, activity_number, app_sub_programme, parent_guardian_mobile,
+                   parent_guardian_email, non_nqf_intervention_subfield, non_nqf_intervention_status,
+                   non_nqf_intervention_credit, unit_standard_id, training_provider_postal_address,
+                   training_provider_accreditation_start_date, training_provider_province_code,
+                   training_provider_physical_address, learnership_id, last_school_emis,
+                   last_school_year, valid_id_number_length, valid_age_for_youth,
+                   correctly_reported_youth, correctly_reported_gender, correctly_reported_race,
+                   skills, employment_status, current_employer, monthly_income, programme_outcome,
+                   status, age, beneficiary_status, id_document_url, qualification_document_url,
+                   notes, validation_errors, created_at, updated_at
             FROM beneficiaries
             WHERE project_id = %s
             ORDER BY created_at DESC;
@@ -357,20 +383,101 @@ def get_project_beneficiaries(project_id):
                 "id": row[0],
                 "first_name": row[1],  # learner_names
                 "last_name": row[2],   # learner_surname
-                "id_number": row[3],
-                "gender": row[4],
-                "age": row[5],
-                "mobile_phone": row[6],
-                "email": row[7],  # email_address
-                "residential_area": row[8],
-                "learner_province": row[9],
-                "learner_municipality": row[10],  # learner_district_municipality
-                "disability": row[11],
-                "youth": row[12],
-                "non_rsa_citizen": row[13],
-                "race": row[14],
-                "status": row[15],
-                "created_at": row[16].strftime("%Y-%m-%d %H:%M:%S") if row[16] else None
+                "initials": row[3],    # learner_initials
+                "id_number": row[4],
+                "date_of_birth": format_date(row[5]),
+                "gender": row[6],
+                "race": row[7],
+                "youth": format_boolean(row[8]),
+                "disability": format_boolean(row[9]),
+                "disability_type": row[10],
+                "non_rsa_citizen": format_boolean(row[11]),
+                "home_language": row[12],
+                "mobile_phone": row[13],
+                "email": row[14],  # email_address
+                "learning_programme_type": row[15],  # type_of_learning_programme
+                "programme_start_date": format_date(row[16]),
+                "programme_completion_date": format_date(row[17]),
+                "certificate_issue_date": format_date(row[18]),
+                "ofo_code": row[19],
+                "nqf_level": row[20],
+                "programme_description": row[21],
+                "qualification_id": row[22],
+                "employer_name": row[23],
+                "employer_sdl_number": row[24],
+                "employer_contact_details": row[25],
+                "training_provider_name": row[26],
+                "training_provider_sdl_number": row[27],
+                "training_provider_contact_details": row[28],
+                "training_provider_type": row[29],
+                "training_provider_province": row[30],
+                "training_provider_code": row[31],
+                "training_provider_etqa_id": row[32],
+                "learner_province": row[33],
+                "learner_district_municipality": row[34],  # learner_municipality
+                "learner_local_municipality": row[35],
+                "residential_area": row[36],
+                "area_type": row[37],
+                "stats_area_code": row[38],
+                "physical_address_line1": row[39],
+                "physical_address_line2": row[40],
+                "physical_address_code": row[41],
+                "postal_address_line1": row[42],
+                "postal_address_line2": row[43],
+                "postal_code": row[44],
+                "seta_industry_funded": format_boolean(row[45]),
+                "amount_spent_per_learner": float(row[46]) if row[46] else None,
+                "agreement_moa_number": row[47],
+                "black_designated_groups": row[48],
+                "black_females": row[49],
+                "black_males": row[50],
+                "coloured_females": row[51],
+                "coloured_males": row[52],
+                "indian_females": row[53],
+                "indian_males": row[54],
+                "white_females": row[55],
+                "white_males": row[56],
+                "disabled_females": row[57],
+                "disabled_males": row[58],
+                "youth_females": row[59],
+                "youth_males": row[60],
+                "non_rsa_citizen_females": row[61],
+                "non_rsa_citizen_males": row[62],
+                "project_number": row[63],
+                "activity_number": row[64],
+                "app_sub_programme": row[65],
+                "parent_guardian_mobile": row[66],
+                "parent_guardian_email": row[67],
+                "non_nqf_intervention_subfield": row[68],
+                "non_nqf_intervention_status": row[69],
+                "non_nqf_intervention_credit": row[70],
+                "unit_standard_id": row[71],
+                "training_provider_postal_address": row[72],
+                "training_provider_accreditation_start_date": format_date(row[73]),
+                "training_provider_province_code": row[74],
+                "training_provider_physical_address": row[75],
+                "learnership_id": row[76],
+                "last_school_emis": row[77],
+                "last_school_year": row[78],
+                "valid_id_number_length": format_boolean(row[79]),
+                "valid_age_for_youth": format_boolean(row[80]),
+                "correctly_reported_youth": format_boolean(row[81]),
+                "correctly_reported_gender": format_boolean(row[82]),
+                "correctly_reported_race": format_boolean(row[83]),
+                "skills": row[84],
+                "employment_status": row[85],
+                "current_employer": row[86],
+                "monthly_income": float(row[87]) if row[87] else None,
+                "programme_outcome": row[88],
+                "status": row[89],  # Main status field
+                "age": row[90],  # New age field
+                "beneficiary_status": row[91],  # New beneficiary_status field
+                "id_document_url": row[92],
+                "qualification_document_url": row[93],
+                "notes": row[94],
+                "validation_errors": row[95],
+                "created_at": row[96].strftime("%Y-%m-%d %H:%M:%S") if row[96] else None,
+                "updated_at": row[97].strftime("%Y-%m-%d %H:%M:%S") if row[97] else None
             })
         
         cur.close()
@@ -380,6 +487,61 @@ def get_project_beneficiaries(project_id):
     except Exception as e:
         print(f"❌ Error in get_project_beneficiaries: {str(e)}")
         print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/beneficiaries", methods=["GET", "OPTIONS"])
+def get_all_beneficiaries():
+    """Get all beneficiaries across all projects"""
+    if request.method == "OPTIONS":
+        return '', 200
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT b.id, b.learner_names, b.learner_surname, b.id_number, b.gender, 
+                   b.age, b.mobile_phone, b.email_address, b.residential_area, 
+                   b.learner_province, b.learner_district_municipality, b.disability, 
+                   b.youth, b.non_rsa_citizen, b.race, b.status, b.beneficiary_status,
+                   b.created_at, p.name as project_name
+            FROM beneficiaries b
+            LEFT JOIN projects p ON b.project_id = p.id
+            ORDER BY b.created_at DESC;
+        """)
+        
+        rows = cur.fetchall()
+        beneficiaries = []
+        for row in rows:
+            beneficiaries.append({
+                "id": row[0],
+                "first_name": row[1],
+                "last_name": row[2],
+                "id_number": row[3],
+                "gender": row[4],
+                "age": row[5],
+                "mobile_phone": row[6],
+                "email": row[7],
+                "residential_area": row[8],
+                "learner_province": row[9],
+                "learner_municipality": row[10],
+                "disability": format_boolean(row[11]),
+                "youth": format_boolean(row[12]),
+                "non_rsa_citizen": format_boolean(row[13]),
+                "race": row[14],
+                "status": row[15],
+                "beneficiary_status": row[16],
+                "created_at": row[17].strftime("%Y-%m-%d %H:%M:%S") if row[17] else None,
+                "project_name": row[18]
+            })
+        
+        cur.close()
+        conn.close()
+        return jsonify(beneficiaries)
+    
+    except Exception as e:
+        print(f"❌ Error in get_all_beneficiaries: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>/beneficiaries", methods=["POST", "OPTIONS"])
@@ -397,24 +559,30 @@ def create_beneficiary(project_id):
             "learner_surname": data.get('last_name', '').strip(),
             "learner_initials": data.get('initials', '').strip(),
             "id_number": data.get('id_number', '').strip(),
+            "date_of_birth": data.get('date_of_birth'),
             "gender": data.get('gender', '').strip(),
             "race": data.get('race', '').strip(),
             "youth": data.get('youth', False),
             "disability": data.get('disability', False),
+            "disability_type": data.get('disability_type', '').strip(),
             "non_rsa_citizen": data.get('non_rsa_citizen', False),
+            "home_language": data.get('home_language', '').strip(),
             "mobile_phone": data.get('mobile_phone', '').strip(),
             "email_address": data.get('email', '').strip(),
             "learner_province": data.get('learner_province', '').strip(),
             "learner_district_municipality": data.get('learner_municipality', '').strip(),
+            "learner_local_municipality": data.get('learner_local_municipality', '').strip(),
             "residential_area": data.get('residential_area', '').strip(),
-            "age": data.get('age'),
-            "seta_industry_funded": data.get('seta_funded', False),
-            "home_language": data.get('home_language', '').strip(),
+            "age": data.get('age'),  # New age field
+            "beneficiary_status": data.get('beneficiary_status', 'Current'),  # New field with default
             "type_of_learning_programme": data.get('learning_programme_type', '').strip(),
-            "programme_start_date": datetime.now().date(),  # Default to today
+            "programme_start_date": data.get('programme_start_date', datetime.now().date()),
+            "programme_completion_date": data.get('programme_completion_date'),
+            "certificate_issue_date": data.get('certificate_issue_date'),
             "ofo_code": data.get('ofo_code', '').strip(),
             "nqf_level": data.get('nqf_level'),
             "programme_description": data.get('qualification_description', '').strip(),
+            "qualification_id": data.get('qualification_id', '').strip(),
             "employer_name": data.get('employer_name', '').strip(),
             "employer_sdl_number": data.get('employer_sdl_number', '').strip(),
             "employer_contact_details": data.get('employer_contact_details', '').strip(),
@@ -427,26 +595,77 @@ def create_beneficiary(project_id):
             "training_provider_etqa_id": data.get('training_provider_etqa_id', '').strip(),
             "training_provider_postal_address": data.get('training_provider_postal_address', '').strip(),
             "training_provider_physical_address": data.get('training_provider_physical_address', '').strip(),
+            "seta_industry_funded": data.get('seta_funded', False),
             "amount_spent_per_learner": data.get('amount_spent_per_learner', 0),
             "learnership_id": data.get('learnership_id', '').strip(),
-            "qualification_id": data.get('qualification_id', '').strip(),
+            "agreement_moa_number": data.get('agreement_number', '').strip(),
             "non_nqf_intervention_subfield": data.get('non_nqf_subfield_id', '').strip(),
             "non_nqf_intervention_status": data.get('non_nqf_status_id', '').strip(),
             "non_nqf_intervention_credit": data.get('non_nqf_credit', '').strip(),
             "unit_standard_id": data.get('unit_standard_id', '').strip(),
-            "agreement_moa_number": data.get('agreement_number', '').strip(),
             "last_school_emis": data.get('last_school_emis', '').strip(),
             "last_school_year": data.get('last_school_year'),
-            "status": "Active"
+            "area_type": data.get('area_type', '').strip(),
+            "physical_address_line1": data.get('physical_address_line1', '').strip(),
+            "physical_address_line2": data.get('physical_address_line2', '').strip(),
+            "postal_address_line1": data.get('postal_address_line1', '').strip(),
+            "postal_address_line2": data.get('postal_address_line2', '').strip(),
+            "postal_code": data.get('postal_code', '').strip(),
+            "parent_guardian_mobile": data.get('parent_guardian_mobile', '').strip(),
+            "parent_guardian_email": data.get('parent_guardian_email', '').strip(),
+            "skills": data.get('skills', '').strip(),
+            "employment_status": data.get('employment_status', '').strip(),
+            "current_employer": data.get('current_employer', '').strip(),
+            "monthly_income": data.get('monthly_income'),
+            "programme_outcome": data.get('programme_outcome', '').strip(),
+            "notes": data.get('notes', '').strip(),
+            "status": data.get('status', 'Active')  # Main status field
         }
         
         # Validate required fields
-        if not beneficiary_data["learner_names"]:
-            return jsonify({"error": "First name is required"}), 400
-        if not beneficiary_data["learner_surname"]:
-            return jsonify({"error": "Last name is required"}), 400
-        if not beneficiary_data["id_number"]:
-            return jsonify({"error": "ID number is required"}), 400
+        required_fields = ["learner_names", "learner_surname", "id_number"]
+        missing_fields = []
+        for field in required_fields:
+            if not beneficiary_data[field]:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+        
+        # Validate age if provided
+        age = beneficiary_data["age"]
+        if age is not None:
+            try:
+                age = int(age)
+                if age < 0 or age > 120:
+                    return jsonify({"error": "Age must be between 0 and 120"}), 400
+                beneficiary_data["age"] = age
+            except (ValueError, TypeError):
+                return jsonify({"error": "Age must be a valid number"}), 400
+        
+        # Handle file uploads if present in form data
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            # Handle ID document upload
+            if 'id_document' in request.files:
+                file = request.files['id_document']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"id_doc_{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    beneficiary_data["id_document_url"] = f"http://localhost:5050/uploads/{filename}"
+            
+            # Handle qualification document upload
+            if 'qualification_document' in request.files:
+                file = request.files['qualification_document']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"qual_doc_{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    beneficiary_data["qualification_document_url"] = f"http://localhost:5050/uploads/{filename}"
         
         conn = get_db_connection()
         if not conn:
@@ -474,20 +693,26 @@ def create_beneficiary(project_id):
             RETURNING id;
         """
         
-        cur.execute(query, values)
-        beneficiary_id = cur.fetchone()[0]
-        conn.commit()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify({
-            "id": beneficiary_id, 
-            "message": "Beneficiary created successfully"
-        }), 201
+        try:
+            cur.execute(query, values)
+            beneficiary_id = cur.fetchone()[0]
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "id": beneficiary_id, 
+                "message": "Beneficiary created successfully"
+            }), 201
+            
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"error": "ID number already exists"}), 409
+            
     
-    except psycopg2.errors.UniqueViolation:
-        return jsonify({"error": "ID number already exists"}), 409
     except Exception as e:
         print(f"❌ Error in create_beneficiary: {str(e)}")
         print(traceback.format_exc())
@@ -505,10 +730,32 @@ def get_beneficiary(beneficiary_id):
         
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, learner_names, learner_surname, id_number, gender, age, 
-                   mobile_phone, email_address, residential_area, learner_province,
-                   learner_district_municipality, disability, youth, non_rsa_citizen,
-                   race, status, created_at
+            SELECT id, learner_names, learner_surname, learner_initials, id_number, 
+                   date_of_birth, gender, race, youth, disability, disability_type,
+                   non_rsa_citizen, home_language, mobile_phone, email_address,
+                   type_of_learning_programme, programme_start_date, programme_completion_date,
+                   certificate_issue_date, ofo_code, nqf_level, programme_description,
+                   qualification_id, employer_name, employer_sdl_number, employer_contact_details,
+                   training_provider_name, training_provider_sdl_number, training_provider_contact_details,
+                   training_provider_type, training_provider_province, training_provider_code,
+                   training_provider_etqa_id, learner_province, learner_district_municipality,
+                   learner_local_municipality, residential_area, area_type, stats_area_code,
+                   physical_address_line1, physical_address_line2, physical_address_code,
+                   postal_address_line1, postal_address_line2, postal_code, seta_industry_funded,
+                   amount_spent_per_learner, agreement_moa_number, black_designated_groups,
+                   black_females, black_males, coloured_females, coloured_males, indian_females,
+                   indian_males, white_females, white_males, disabled_females, disabled_males,
+                   youth_females, youth_males, non_rsa_citizen_females, non_rsa_citizen_males,
+                   project_number, activity_number, app_sub_programme, parent_guardian_mobile,
+                   parent_guardian_email, non_nqf_intervention_subfield, non_nqf_intervention_status,
+                   non_nqf_intervention_credit, unit_standard_id, training_provider_postal_address,
+                   training_provider_accreditation_start_date, training_provider_province_code,
+                   training_provider_physical_address, learnership_id, last_school_emis,
+                   last_school_year, valid_id_number_length, valid_age_for_youth,
+                   correctly_reported_youth, correctly_reported_gender, correctly_reported_race,
+                   skills, employment_status, current_employer, monthly_income, programme_outcome,
+                   status, age, beneficiary_status, id_document_url, qualification_document_url,
+                   notes, validation_errors, created_at, updated_at, project_id
             FROM beneficiaries
             WHERE id = %s;
         """, (beneficiary_id,))
@@ -524,20 +771,102 @@ def get_beneficiary(beneficiary_id):
             "id": row[0],
             "first_name": row[1],
             "last_name": row[2],
-            "id_number": row[3],
-            "gender": row[4],
-            "age": row[5],
-            "mobile_phone": row[6],
-            "email": row[7],
-            "residential_area": row[8],
-            "learner_province": row[9],
-            "learner_municipality": row[10],
-            "disability": row[11],
-            "youth": row[12],
-            "non_rsa_citizen": row[13],
-            "race": row[14],
-            "status": row[15],
-            "created_at": row[16].strftime("%Y-%m-%d %H:%M:%S") if row[16] else None
+            "initials": row[3],
+            "id_number": row[4],
+            "date_of_birth": format_date(row[5]),
+            "gender": row[6],
+            "race": row[7],
+            "youth": format_boolean(row[8]),
+            "disability": format_boolean(row[9]),
+            "disability_type": row[10],
+            "non_rsa_citizen": format_boolean(row[11]),
+            "home_language": row[12],
+            "mobile_phone": row[13],
+            "email": row[14],
+            "learning_programme_type": row[15],
+            "programme_start_date": format_date(row[16]),
+            "programme_completion_date": format_date(row[17]),
+            "certificate_issue_date": format_date(row[18]),
+            "ofo_code": row[19],
+            "nqf_level": row[20],
+            "programme_description": row[21],
+            "qualification_id": row[22],
+            "employer_name": row[23],
+            "employer_sdl_number": row[24],
+            "employer_contact_details": row[25],
+            "training_provider_name": row[26],
+            "training_provider_sdl_number": row[27],
+            "training_provider_contact_details": row[28],
+            "training_provider_type": row[29],
+            "training_provider_province": row[30],
+            "training_provider_code": row[31],
+            "training_provider_etqa_id": row[32],
+            "learner_province": row[33],
+            "learner_district_municipality": row[34],
+            "learner_local_municipality": row[35],
+            "residential_area": row[36],
+            "area_type": row[37],
+            "stats_area_code": row[38],
+            "physical_address_line1": row[39],
+            "physical_address_line2": row[40],
+            "physical_address_code": row[41],
+            "postal_address_line1": row[42],
+            "postal_address_line2": row[43],
+            "postal_code": row[44],
+            "seta_industry_funded": format_boolean(row[45]),
+            "amount_spent_per_learner": float(row[46]) if row[46] else None,
+            "agreement_moa_number": row[47],
+            "black_designated_groups": row[48],
+            "black_females": row[49],
+            "black_males": row[50],
+            "coloured_females": row[51],
+            "coloured_males": row[52],
+            "indian_females": row[53],
+            "indian_males": row[54],
+            "white_females": row[55],
+            "white_males": row[56],
+            "disabled_females": row[57],
+            "disabled_males": row[58],
+            "youth_females": row[59],
+            "youth_males": row[60],
+            "non_rsa_citizen_females": row[61],
+            "non_rsa_citizen_males": row[62],
+            "project_number": row[63],
+            "activity_number": row[64],
+            "app_sub_programme": row[65],
+            "parent_guardian_mobile": row[66],
+            "parent_guardian_email": row[67],
+            "non_nqf_intervention_subfield": row[68],
+            "non_nqf_intervention_status": row[69],
+            "non_nqf_intervention_credit": row[70],
+            "unit_standard_id": row[71],
+            "training_provider_postal_address": row[72],
+            "training_provider_accreditation_start_date": format_date(row[73]),
+            "training_provider_province_code": row[74],
+            "training_provider_physical_address": row[75],
+            "learnership_id": row[76],
+            "last_school_emis": row[77],
+            "last_school_year": row[78],
+            "valid_id_number_length": format_boolean(row[79]),
+            "valid_age_for_youth": format_boolean(row[80]),
+            "correctly_reported_youth": format_boolean(row[81]),
+            "correctly_reported_gender": format_boolean(row[82]),
+            "correctly_reported_race": format_boolean(row[83]),
+            "skills": row[84],
+            "employment_status": row[85],
+            "current_employer": row[86],
+            "monthly_income": float(row[87]) if row[87] else None,
+            "programme_outcome": row[88],
+            "status": row[89],
+            "age": row[90],  # New age field
+            "beneficiary_status": row[91],  # New beneficiary_status field
+            "id_document_url": row[92],
+            "qualification_document_url": row[93],
+            "notes": row[94],
+            "validation_errors": row[95],
+            "created_at": row[96].strftime("%Y-%m-%d %H:%M:%S") if row[96] else None,
+            "updated_at": row[97].strftime("%Y-%m-%d %H:%M:%S") if row[97] else None,
+            "project_id": row[98]
         }
         return jsonify(beneficiary)
     
@@ -551,7 +880,33 @@ def update_beneficiary(beneficiary_id):
     if request.method == "OPTIONS":
         return '', 200
     try:
-        data = request.json
+        # Check if request has form data
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            data = request.form
+            # Handle file uploads
+            file_data = {}
+            if 'id_document' in request.files:
+                file = request.files['id_document']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"id_doc_{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    file_data["id_document_url"] = f"http://localhost:5050/uploads/{filename}"
+            
+            if 'qualification_document' in request.files:
+                file = request.files['qualification_document']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"qual_doc_{timestamp}_{filename}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    file_data["qualification_document_url"] = f"http://localhost:5050/uploads/{filename}"
+        else:
+            data = request.json
+            file_data = {}
         
         conn = get_db_connection()
         if not conn:
@@ -570,20 +925,82 @@ def update_beneficiary(beneficiary_id):
         update_data = {
             "learner_names": data.get('first_name'),
             "learner_surname": data.get('last_name'),
+            "learner_initials": data.get('initials'),
             "id_number": data.get('id_number'),
+            "date_of_birth": data.get('date_of_birth'),
             "gender": data.get('gender'),
-            "age": data.get('age'),
+            "age": data.get('age'),  # New age field
+            "beneficiary_status": data.get('beneficiary_status'),  # New beneficiary_status field
             "race": data.get('race'),
             "youth": data.get('youth'),
             "disability": data.get('disability'),
+            "disability_type": data.get('disability_type'),
             "non_rsa_citizen": data.get('non_rsa_citizen'),
+            "home_language": data.get('home_language'),
             "mobile_phone": data.get('mobile_phone'),
             "email_address": data.get('email'),
             "learner_province": data.get('learner_province'),
             "learner_district_municipality": data.get('learner_municipality'),
+            "learner_local_municipality": data.get('learner_local_municipality'),
             "residential_area": data.get('residential_area'),
+            "area_type": data.get('area_type'),
+            "type_of_learning_programme": data.get('learning_programme_type'),
+            "programme_start_date": data.get('programme_start_date'),
+            "programme_completion_date": data.get('programme_completion_date'),
+            "certificate_issue_date": data.get('certificate_issue_date'),
+            "ofo_code": data.get('ofo_code'),
+            "nqf_level": data.get('nqf_level'),
+            "programme_description": data.get('programme_description'),
+            "qualification_id": data.get('qualification_id'),
+            "employer_name": data.get('employer_name'),
+            "employer_sdl_number": data.get('employer_sdl_number'),
+            "employer_contact_details": data.get('employer_contact_details'),
+            "training_provider_name": data.get('training_provider_name'),
+            "training_provider_sdl_number": data.get('training_provider_sdl_number'),
+            "training_provider_contact_details": data.get('training_provider_contact_details'),
+            "training_provider_type": data.get('training_provider_type'),
+            "training_provider_province": data.get('training_provider_province'),
+            "training_provider_code": data.get('training_provider_code'),
+            "training_provider_etqa_id": data.get('training_provider_etqa_id'),
+            "seta_industry_funded": data.get('seta_funded'),
+            "amount_spent_per_learner": data.get('amount_spent_per_learner'),
+            "learnership_id": data.get('learnership_id'),
+            "agreement_moa_number": data.get('agreement_number'),
+            "non_nqf_intervention_subfield": data.get('non_nqf_subfield_id'),
+            "non_nqf_intervention_status": data.get('non_nqf_status_id'),
+            "non_nqf_intervention_credit": data.get('non_nqf_credit'),
+            "unit_standard_id": data.get('unit_standard_id'),
+            "last_school_emis": data.get('last_school_emis'),
+            "last_school_year": data.get('last_school_year'),
+            "physical_address_line1": data.get('physical_address_line1'),
+            "physical_address_line2": data.get('physical_address_line2'),
+            "postal_address_line1": data.get('postal_address_line1'),
+            "postal_address_line2": data.get('postal_address_line2'),
+            "postal_code": data.get('postal_code'),
+            "parent_guardian_mobile": data.get('parent_guardian_mobile'),
+            "parent_guardian_email": data.get('parent_guardian_email'),
+            "skills": data.get('skills'),
+            "employment_status": data.get('employment_status'),
+            "current_employer": data.get('current_employer'),
+            "monthly_income": data.get('monthly_income'),
+            "programme_outcome": data.get('programme_outcome'),
+            "notes": data.get('notes'),
+            "status": data.get('status'),  # Main status field
             "updated_at": datetime.now()
         }
+        
+        # Add file data
+        update_data.update(file_data)
+        
+        # Validate age if provided
+        if update_data.get("age") is not None:
+            try:
+                age = int(update_data["age"])
+                if age < 0 or age > 120:
+                    return jsonify({"error": "Age must be between 0 and 120"}), 400
+                update_data["age"] = age
+            except (ValueError, TypeError):
+                return jsonify({"error": "Age must be a valid number"}), 400
         
         # Filter out None values
         update_data = {k: v for k, v in update_data.items() if v is not None}
@@ -598,12 +1015,10 @@ def update_beneficiary(beneficiary_id):
         values = []
         
         for field, value in update_data.items():
-            if field == "age" and value is not None:
-                try:
-                    value = int(value)
-                except (ValueError, TypeError):
-                    continue
-            
+            # Handle boolean conversion
+            if field in ['youth', 'disability', 'non_rsa_citizen', 'seta_industry_funded']:
+                if isinstance(value, str):
+                    value = value.lower() in ['true', 'yes', '1', 't']
             update_fields.append(f"{field} = %s")
             values.append(value)
         
@@ -614,15 +1029,23 @@ def update_beneficiary(beneficiary_id):
             WHERE id = %s
         """
         
-        cur.execute(query, values)
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        return jsonify({"message": "Beneficiary updated successfully"})
+        try:
+            cur.execute(query, values)
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return jsonify({"message": "Beneficiary updated successfully"})
+            
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"error": "ID number already exists"}), 409
     
     except Exception as e:
         print(f"❌ Error in update_beneficiary: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/beneficiaries/<int:beneficiary_id>", methods=["DELETE", "OPTIONS"])
@@ -653,7 +1076,205 @@ def delete_beneficiary(beneficiary_id):
         print(f"❌ Error in delete_beneficiary: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Add this import at the top of your file
+# ================= BENEFICIARY STATISTICS =================
+
+@app.route("/api/beneficiaries/statistics", methods=["GET", "OPTIONS"])
+def get_beneficiary_statistics():
+    """Get beneficiary statistics"""
+    if request.method == "OPTIONS":
+        return '', 200
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cur = conn.cursor()
+        
+        # Get total beneficiaries
+        cur.execute("SELECT COUNT(*) FROM beneficiaries")
+        total_beneficiaries = cur.fetchone()[0]
+        
+        # Get beneficiaries by gender
+        cur.execute("""
+            SELECT gender, COUNT(*) 
+            FROM beneficiaries 
+            WHERE gender IS NOT NULL 
+            GROUP BY gender
+        """)
+        gender_stats = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get beneficiaries by race
+        cur.execute("""
+            SELECT race, COUNT(*) 
+            FROM beneficiaries 
+            WHERE race IS NOT NULL 
+            GROUP BY race
+        """)
+        race_stats = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get beneficiaries by status
+        cur.execute("""
+            SELECT beneficiary_status, COUNT(*) 
+            FROM beneficiaries 
+            WHERE beneficiary_status IS NOT NULL 
+            GROUP BY beneficiary_status
+        """)
+        status_stats = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get beneficiaries by age group
+        cur.execute("""
+            SELECT 
+                CASE 
+                    WHEN age < 18 THEN 'Under 18'
+                    WHEN age BETWEEN 18 AND 25 THEN '18-25'
+                    WHEN age BETWEEN 26 AND 35 THEN '26-35'
+                    WHEN age BETWEEN 36 AND 45 THEN '36-45'
+                    WHEN age > 45 THEN 'Over 45'
+                    ELSE 'Unknown'
+                END as age_group,
+                COUNT(*)
+            FROM beneficiaries 
+            WHERE age IS NOT NULL
+            GROUP BY 1
+        """)
+        age_stats = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get beneficiaries by province
+        cur.execute("""
+            SELECT learner_province, COUNT(*) 
+            FROM beneficiaries 
+            WHERE learner_province IS NOT NULL 
+            GROUP BY learner_province
+        """)
+        province_stats = {row[0]: row[1] for row in cur.fetchall()}
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "total_beneficiaries": total_beneficiaries,
+            "gender_distribution": gender_stats,
+            "race_distribution": race_stats,
+            "status_distribution": status_stats,
+            "age_distribution": age_stats,
+            "province_distribution": province_stats
+        })
+    
+    except Exception as e:
+        print(f"❌ Error in get_beneficiary_statistics: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# ================= SEARCH BENEFICIARIES =================
+
+@app.route("/api/beneficiaries/search", methods=["GET", "OPTIONS"])
+def search_beneficiaries():
+    """Search beneficiaries by various criteria"""
+    if request.method == "OPTIONS":
+        return '', 200
+    
+    try:
+        # Get search parameters
+        search_term = request.args.get('q', '')
+        project_id = request.args.get('project_id')
+        gender = request.args.get('gender')
+        race = request.args.get('race')
+        beneficiary_status = request.args.get('beneficiary_status')
+        min_age = request.args.get('min_age')
+        max_age = request.args.get('max_age')
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cur = conn.cursor()
+        
+        # Build query dynamically
+        query = """
+            SELECT b.id, b.learner_names, b.learner_surname, b.id_number, b.gender, 
+                   b.age, b.mobile_phone, b.email_address, b.residential_area, 
+                   b.learner_province, b.learner_district_municipality, b.disability, 
+                   b.youth, b.non_rsa_citizen, b.race, b.status, b.beneficiary_status,
+                   b.created_at, p.name as project_name
+            FROM beneficiaries b
+            LEFT JOIN projects p ON b.project_id = p.id
+            WHERE 1=1
+        """
+        params = []
+        
+        if search_term:
+            query += """
+                AND (b.learner_names ILIKE %s 
+                OR b.learner_surname ILIKE %s 
+                OR b.id_number ILIKE %s 
+                OR b.email_address ILIKE %s)
+            """
+            search_pattern = f"%{search_term}%"
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+        
+        if project_id:
+            query += " AND b.project_id = %s"
+            params.append(project_id)
+        
+        if gender:
+            query += " AND b.gender = %s"
+            params.append(gender)
+        
+        if race:
+            query += " AND b.race = %s"
+            params.append(race)
+        
+        if beneficiary_status:
+            query += " AND b.beneficiary_status = %s"
+            params.append(beneficiary_status)
+        
+        if min_age:
+            query += " AND b.age >= %s"
+            params.append(int(min_age))
+        
+        if max_age:
+            query += " AND b.age <= %s"
+            params.append(int(max_age))
+        
+        query += " ORDER BY b.created_at DESC"
+        
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        
+        beneficiaries = []
+        for row in rows:
+            beneficiaries.append({
+                "id": row[0],
+                "first_name": row[1],
+                "last_name": row[2],
+                "id_number": row[3],
+                "gender": row[4],
+                "age": row[5],
+                "mobile_phone": row[6],
+                "email": row[7],
+                "residential_area": row[8],
+                "learner_province": row[9],
+                "learner_municipality": row[10],
+                "disability": format_boolean(row[11]),
+                "youth": format_boolean(row[12]),
+                "non_rsa_citizen": format_boolean(row[13]),
+                "race": row[14],
+                "status": row[15],
+                "beneficiary_status": row[16],
+                "created_at": row[17].strftime("%Y-%m-%d %H:%M:%S") if row[17] else None,
+                "project_name": row[18]
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "results": beneficiaries,
+            "count": len(beneficiaries)
+        })
+    
+    except Exception as e:
+        print(f"❌ Error in search_beneficiaries: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 # ================= HEALTH CHECK =================
 @app.route("/api/health", methods=["GET"])
@@ -679,4 +1300,7 @@ def serve_uploaded_file(filename):
 # ================= RUN SERVER =================
 if __name__ == "__main__":
     print("🚀 JumpStart Backend Server running...")
+    print("📊 Database: jumpstart_database")
+    print("🔗 API running on: http://localhost:5050")
+    print("📁 Upload folder: uploads/")
     app.run(debug=True, port=5050, host='0.0.0.0')
