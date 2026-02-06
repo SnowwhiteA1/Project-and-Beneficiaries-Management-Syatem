@@ -29,7 +29,15 @@ import {
   FormHelperText,
   Tabs,
   Tab,
-  Divider
+  Divider,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CardHeader
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
@@ -42,6 +50,18 @@ import WorkIcon from "@mui/icons-material/Work";
 import SchoolIcon from "@mui/icons-material/School";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import BadgeIcon from "@mui/icons-material/Badge";
+import TranslateIcon from "@mui/icons-material/Translate";
+import AccessibilityNewIcon from "@mui/icons-material/AccessibilityNew";
+import PublicIcon from "@mui/icons-material/Public";
+import BusinessIcon from "@mui/icons-material/Business";
+import DescriptionIcon from "@mui/icons-material/Description";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import PaymentIcon from "@mui/icons-material/Payment";
+import NotesIcon from "@mui/icons-material/Notes";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CloseIcon from "@mui/icons-material/Close";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -57,6 +77,7 @@ const Beneficiaries = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const [openDialog, setOpenDialog] = useState(false);
+  const [openDetailDialog, setOpenDetailDialog] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
@@ -511,6 +532,40 @@ const Beneficiaries = () => {
     }
   };
 
+  // Handle card click to show beneficiary details
+  const handleCardClick = (beneficiary) => {
+    setSelectedBeneficiary(beneficiary);
+    setOpenDetailDialog(true);
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return "Not specified";
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount) => {
+    if (!amount || isNaN(amount)) return "R 0.00";
+    return `R ${parseFloat(amount).toLocaleString('en-ZA', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
+
+  // Check if value exists and is not empty
+  const hasValue = (value) => {
+    return value !== null && value !== undefined && value !== "";
+  };
+
   // Tab panel component
   const TabPanel = ({ children, value, index, ...other }) => {
     return (
@@ -527,6 +582,561 @@ const Beneficiaries = () => {
           </Box>
         )}
       </div>
+    );
+  };
+
+  // Detail view component for beneficiary
+  const BeneficiaryDetailView = ({ beneficiary, onClose }) => {
+    if (!beneficiary) return null;
+
+    return (
+      <Dialog 
+        open={openDetailDialog} 
+        onClose={onClose} 
+        fullWidth 
+        maxWidth="md"
+        maxHeight="90vh"
+      >
+        <DialogTitle sx={{ 
+          borderBottom: 1, 
+          borderColor: 'divider', 
+          pb: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Box>
+            <Typography variant="h5" component="div" fontWeight="bold">
+              {beneficiary.first_name} {beneficiary.last_name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              ID: {beneficiary.id_number || "Not specified"}
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* Personal Information */}
+          <Accordion defaultExpanded>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PersonIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Personal Information
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <BadgeIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="ID Number" 
+                      secondary={beneficiary.id_number || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <CalendarTodayIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Date of Birth" 
+                      secondary={formatDate(beneficiary.date_of_birth)}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PersonIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Gender" 
+                      secondary={beneficiary.gender || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PublicIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Race" 
+                      secondary={beneficiary.race || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <Typography sx={{ fontSize: '14px', minWidth: 36 }}>Age</Typography>
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Age" 
+                      secondary={beneficiary.age ? `${beneficiary.age} years` : "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <TranslateIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Home Language" 
+                      secondary={beneficiary.home_language || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+                    {beneficiary.youth && (
+                      <Chip 
+                        icon={<PersonIcon />} 
+                        label="Youth" 
+                        color="primary" 
+                        variant="outlined"
+                        size="small"
+                      />
+                    )}
+                    {beneficiary.disability && (
+                      <Chip 
+                        icon={<AccessibilityNewIcon />} 
+                        label={beneficiary.disability_type ? `Disability: ${beneficiary.disability_type}` : "Disability"} 
+                        color="secondary" 
+                        variant="outlined"
+                        size="small"
+                      />
+                    )}
+                    {beneficiary.non_rsa_citizen && (
+                      <Chip 
+                        icon={<PublicIcon />} 
+                        label="Non-RSA Citizen" 
+                        color="warning" 
+                        variant="outlined"
+                        size="small"
+                      />
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Contact Information */}
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PhoneIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Contact Information
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PhoneIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Mobile Phone" 
+                      secondary={beneficiary.mobile_phone || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <EmailIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Email" 
+                      secondary={beneficiary.email || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PhoneIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Guardian Mobile" 
+                      secondary={beneficiary.parent_guardian_mobile || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <EmailIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Guardian Email" 
+                      secondary={beneficiary.parent_guardian_email || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Address Information */}
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <HomeIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Address Information
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <LocationOnIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Province" 
+                      secondary={beneficiary.learner_province || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <LocationOnIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="District Municipality" 
+                      secondary={beneficiary.learner_municipality || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <LocationOnIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Residential Area" 
+                      secondary={beneficiary.residential_area || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <LocationOnIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Area Type" 
+                      secondary={beneficiary.area_type || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                {hasValue(beneficiary.physical_address_line1) && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      Physical Address
+                    </Typography>
+                    <Typography variant="body2">
+                      {beneficiary.physical_address_line1}
+                      {beneficiary.physical_address_line2 && `, ${beneficiary.physical_address_line2}`}
+                      {beneficiary.physical_address_code && `, ${beneficiary.physical_address_code}`}
+                    </Typography>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.postal_address_line1) && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      Postal Address
+                    </Typography>
+                    <Typography variant="body2">
+                      {beneficiary.postal_address_line1}
+                      {beneficiary.postal_address_line2 && `, ${beneficiary.postal_address_line2}`}
+                      {beneficiary.postal_code && `, ${beneficiary.postal_code}`}
+                    </Typography>
+                  </Grid>
+                )}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Programme Information */}
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SchoolIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Programme Information
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Programme Type" 
+                      secondary={beneficiary.learning_programme_type || "Not specified"}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Status" 
+                      secondary={
+                        <Chip 
+                          label={beneficiary.status || "Active"} 
+                          size="small"
+                          color={beneficiary.status === 'Active' ? 'success' : 
+                                 beneficiary.status === 'Completed' ? 'primary' : 'default'}
+                        />
+                      }
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Start Date" 
+                      secondary={formatDate(beneficiary.programme_start_date)}
+                    />
+                  </ListItem>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Completion Date" 
+                      secondary={formatDate(beneficiary.programme_completion_date)}
+                    />
+                  </ListItem>
+                </Grid>
+                {hasValue(beneficiary.programme_outcome) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="Outcome" 
+                        secondary={beneficiary.programme_outcome}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.ofo_code) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="OFO Code" 
+                        secondary={beneficiary.ofo_code}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.nqf_level) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="NQF Level" 
+                        secondary={beneficiary.nqf_level}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.qualification_description) && (
+                  <Grid item xs={12}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="Programme Description" 
+                        secondary={beneficiary.qualification_description}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Employment & Training */}
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WorkIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Employment & Training
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {hasValue(beneficiary.employment_status) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="Employment Status" 
+                        secondary={beneficiary.employment_status}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.current_employer) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="Current Employer" 
+                        secondary={beneficiary.current_employer}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.training_provider_name) && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      Training Provider
+                    </Typography>
+                    <Typography variant="body2">
+                      {beneficiary.training_provider_name}
+                      {beneficiary.training_provider_contact_details && ` | ${beneficiary.training_provider_contact_details}`}
+                    </Typography>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.monthly_income) && parseFloat(beneficiary.monthly_income) > 0 && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        <MonetizationOnIcon fontSize="small" color="action" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Monthly Income" 
+                        secondary={formatCurrency(beneficiary.monthly_income)}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.skills) && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      Skills
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {beneficiary.skills.split(',').map((skill, index) => (
+                        <Chip key={index} label={skill.trim()} size="small" />
+                      ))}
+                    </Box>
+                  </Grid>
+                )}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Financial Information */}
+          {(hasValue(beneficiary.seta_funded) || hasValue(beneficiary.amount_spent_per_learner)) && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PaymentIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Financial Information
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  {hasValue(beneficiary.seta_funded) && (
+                    <Grid item xs={12} sm={6}>
+                      <ListItem disablePadding>
+                        <ListItemText 
+                          primary="SETA Funded" 
+                          secondary={
+                            <Chip 
+                              label={beneficiary.seta_funded ? "Yes" : "No"} 
+                              size="small"
+                              color={beneficiary.seta_funded ? "success" : "default"}
+                            />
+                          }
+                        />
+                      </ListItem>
+                    </Grid>
+                  )}
+                  {hasValue(beneficiary.amount_spent_per_learner) && (
+                    <Grid item xs={12} sm={6}>
+                      <ListItem disablePadding>
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          <MonetizationOnIcon fontSize="small" color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Amount Spent" 
+                          secondary={formatCurrency(beneficiary.amount_spent_per_learner)}
+                        />
+                      </ListItem>
+                    </Grid>
+                  )}
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
+          {/* Notes */}
+          {hasValue(beneficiary.notes) && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <NotesIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Notes
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {beneficiary.notes}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
+          {/* Metadata */}
+          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">
+              Created: {formatDate(beneficiary.created_at)}
+              {beneficiary.updated_at && ` • Updated: ${formatDate(beneficiary.updated_at)}`}
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={() => {
+              setOpenDetailDialog(false);
+              handleEditClick();
+            }}
+            variant="outlined"
+            startIcon={<PersonIcon />}
+          >
+            Edit Beneficiary
+          </Button>
+          <Button 
+            onClick={onClose} 
+            variant="contained"
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     );
   };
 
@@ -590,7 +1200,7 @@ const Beneficiaries = () => {
         </Button>
       </Box>
 
-      {/* BENEFICIARIES GRID (Same as before) */}
+      {/* BENEFICIARIES GRID */}
       {beneficiaries.length === 0 ? (
         <Paper sx={{ p: 6, textAlign: "center", mt: 4, borderRadius: 3 }}>
           <PersonIcon sx={{ fontSize: 80, color: "text.secondary", mb: 3, opacity: 0.7 }} />
@@ -617,15 +1227,19 @@ const Beneficiaries = () => {
         <Grid container spacing={3}>
           {beneficiaries.map((beneficiary) => (
             <Grid item xs={12} sm={6} md={4} key={beneficiary.id}>
-              <Card sx={{ 
-                height: "100%", 
-                position: "relative", 
-                transition: 'all 0.3s ease',
-                '&:hover': { 
-                  boxShadow: 6,
-                  transform: 'translateY(-4px)'
-                }
-              }}>
+              <Card 
+                sx={{ 
+                  height: "100%", 
+                  position: "relative", 
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                  '&:hover': { 
+                    boxShadow: 6,
+                    transform: 'translateY(-4px)'
+                  }
+                }}
+                onClick={() => handleCardClick(beneficiary)}
+              >
                 <IconButton
                   sx={{ 
                     position: "absolute", 
@@ -637,7 +1251,10 @@ const Beneficiaries = () => {
                       bgcolor: 'action.hover'
                     }
                   }}
-                  onClick={(e) => handleMenuOpen(e, beneficiary)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMenuOpen(e, beneficiary);
+                  }}
                 >
                   <MoreVertIcon />
                 </IconButton>
@@ -708,25 +1325,33 @@ const Beneficiaries = () => {
                     )}
                   </Stack>
                   
-                  {beneficiary.created_at && (
+                  <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
                     <Typography 
                       variant="caption" 
-                      color="text.secondary" 
-                      sx={{ 
-                        display: "block", 
-                        mt: 3, 
-                        pt: 2, 
-                        borderTop: 1, 
-                        borderColor: 'divider' 
-                      }}
+                      color="text.secondary"
+                      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      Added: {new Date(beneficiary.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
+                      <span>
+                        Added: {new Date(beneficiary.created_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </span>
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          color: beneficiary.status === 'Active' ? 'success.main' : 
+                                 beneficiary.status === 'Completed' ? 'primary.main' : 'text.secondary'
+                        }}
+                      >
+                        {beneficiary.status || 'Active'}
+                      </Typography>
                     </Typography>
-                  )}
+                    <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5 }}>
+                      Click to view details →
+                    </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -1669,6 +2294,17 @@ const Beneficiaries = () => {
         </DialogActions>
       </Dialog>
 
+      {/* DETAIL VIEW DIALOG */}
+      {selectedBeneficiary && (
+        <BeneficiaryDetailView 
+          beneficiary={selectedBeneficiary}
+          onClose={() => {
+            setOpenDetailDialog(false);
+            setSelectedBeneficiary(null);
+          }}
+        />
+      )}
+
       {/* MENU */}
       <Menu
         anchorEl={menuAnchorEl}
@@ -1678,6 +2314,9 @@ const Beneficiaries = () => {
       >
         <MenuItem onClick={handleEditClick}>
           Edit
+        </MenuItem>
+        <MenuItem onClick={() => handleCardClick(selectedBeneficiary)}>
+          View Details
         </MenuItem>
         <MenuItem onClick={handleDeleteClick} sx={{ color: "error.main" }}>
           Delete
