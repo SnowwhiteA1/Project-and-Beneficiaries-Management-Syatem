@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./components/Dashboard";
 import Login from "./components/Login";
+import Analytics from "./components/Analytics";
 import Beneficiaries from "./components/Beneficiaries";
 
 const App = () => {
@@ -42,6 +43,18 @@ const App = () => {
           }
         />
 
+        {/* Analytics Page */}
+        <Route
+          path="/analytics"
+          element={
+            isAuthenticated ? (
+              <Analytics />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
         {/* Beneficiaries Page */}
         <Route
           path="/beneficiaries/:projectId"
@@ -55,6 +68,18 @@ const App = () => {
         />
 
         {/* Default route */}
+        <Route 
+          path="/" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+
+        {/* Catch-all route */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

@@ -1190,7 +1190,7 @@ const Beneficiaries = () => {
         
         <Button
           variant="contained"
-          color="warning"
+          color="primary"
           startIcon={<AddIcon />}
           onClick={() => {
             resetForm();
@@ -1214,7 +1214,7 @@ const Beneficiaries = () => {
           </Typography>
           <Button
             variant="contained"
-            color="warning"
+            color="primary"
             startIcon={<AddIcon />}
             onClick={() => {
               resetForm();

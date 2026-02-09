@@ -62,7 +62,7 @@ const Login = ({ onLogin }) => {  // Add onLogin as a prop here
 
       
             {/* Title */}
-            <Typography variant="h5" sx={{ textAlign: "center", fontWeight: "bold", color: "orange", mb: 3 }}>
+            <Typography variant="h5" sx={{ textAlign: "center", fontWeight: "bold", color: "primary", mb: 3 }}>
               Projects and Beneficiary Management System
             </Typography>
 

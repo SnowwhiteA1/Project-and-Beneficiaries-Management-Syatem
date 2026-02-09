@@ -29,7 +29,8 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { useNavigate } from "react-router-dom"; // ADDED
+import AnalyticsIcon from "@mui/icons-material/Analytics"; // ADDED
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const companyLogo = "/logo.jpeg";
@@ -37,11 +38,10 @@ const API_BASE = "http://localhost:5050";
 const API_URL = `${API_BASE}/api/projects`;
 
 // Predefined options
-const ACCREDITORS_LIST = ["BankSeta", "Fasset", "MICSETA", "JumpStart", "Social Development"];
-const FUNDERS_LIST = ["BankSeta", "Fasset", "MICSETA", "Government", "Private Donor"];
-const PROJECT_TYPES = ["Training", "Workshop", "Internship", "Mentorship", "Research"];
+const ACCREDITORS_LIST = ["MICSETA", "QASA"]; 
+const FUNDERS_LIST = ["BankSeta", "Fasset", "Social Development", "Private Donor"]; 
+const PROJECT_TYPES = ["Training", "Learnership", "Internship", "Mentorship", "Research"]; 
 const STATUS_OPTIONS = ["Active", "Completed", "Planning", "On Hold"];
-
 const Dashboard = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,6 @@ const Dashboard = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
 
-  // ADDED: Navigation hook
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -91,11 +90,14 @@ const Dashboard = () => {
     }
   };
 
-  // ADDED: Handle project card click
- // In Dashboard.js - Update the navigation path
-const handleProjectClick = (projectId) => {
-  navigate(`/beneficiaries/${projectId}`);
-};
+  const handleProjectClick = (projectId) => {
+    navigate(`/beneficiaries/${projectId}`);
+  };
+
+  // ADDED: Handle analytics navigation
+  const handleAnalyticsClick = () => {
+    navigate("/analytics");
+  };
 
   const resetForm = () => {
     setName("");
@@ -270,17 +272,40 @@ const handleProjectClick = (projectId) => {
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
+      {/* UPDATED: Added Analytics button to the header section */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 4, p: 3, bgcolor: 'background.paper', borderRadius: 2, boxShadow: 1 }}>
-        <Typography variant="h6">Total Projects: {projects.length}</Typography>
-        <Button variant="contained" color="warning" startIcon={<AddIcon />} onClick={handleOpen}>
-          Add New Project
-        </Button>
+        <Box>
+          <Typography variant="h6" sx={{ mb: 1 }}>Total Projects: {projects.length}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {projects.filter(p => p.status === 'Active').length} Active • 
+            {projects.filter(p => p.status === 'Completed').length} Completed
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          <Button 
+            variant="outlined" 
+            color="primary" 
+            startIcon={<AnalyticsIcon />}
+            onClick={handleAnalyticsClick}
+            sx={{ height: 40  }}
+          >
+            Analytics & Reports
+          </Button>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            startIcon={<AddIcon />} 
+            onClick={handleOpen}
+            sx={{ height: 40 }}
+          >
+            Add New Project
+          </Button>
+        </Box>
       </Box>
 
       <Grid container spacing={3}>
         {projects.map((p) => (
           <Grid item xs={12} sm={6} md={4} key={p.id}>
-            {/* UPDATED: Added onClick handler to Card */}
             <Card 
               sx={{ 
                 cursor: "pointer", 
@@ -294,7 +319,6 @@ const handleProjectClick = (projectId) => {
               }}
               onClick={() => handleProjectClick(p.id)}
             >
-              {/* UPDATED: Added stopPropagation to menu button */}
               <IconButton 
                 sx={{ 
                   position: "absolute", 
@@ -307,7 +331,7 @@ const handleProjectClick = (projectId) => {
                   }
                 }} 
                 onClick={(e) => {
-                  e.stopPropagation(); // Prevent card click when clicking menu
+                  e.stopPropagation();
                   handleMenuClick(e, p);
                 }}
               >

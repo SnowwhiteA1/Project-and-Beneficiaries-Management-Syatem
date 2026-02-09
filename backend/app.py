@@ -1291,6 +1291,67 @@ def health_check():
             return jsonify({"status": "unhealthy", "database": "disconnected"}), 500
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
+    
+   # ================= ANALYTICS ENDPOINTS =================
+
+@app.route("/api/analytics/projects", methods=["GET", "OPTIONS"])
+def get_project_analytics():
+    """Simple analytics endpoint"""
+    if request.method == "OPTIONS":
+        return '', 200
+    try:
+        print("🔍 Analytics endpoint called")
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cur = conn.cursor()
+        
+        # Get total projects
+        cur.execute("SELECT COUNT(*) FROM projects")
+        total_projects = cur.fetchone()[0]
+        
+        # Get project types
+        cur.execute("SELECT project_type, COUNT(*) FROM projects GROUP BY project_type")
+        type_data = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get status
+        cur.execute("SELECT status, COUNT(*) FROM projects GROUP BY status")
+        status_data = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # Get funders
+        cur.execute("SELECT COALESCE(funder, 'No Funder'), COUNT(*) FROM projects GROUP BY funder")
+        funder_data = {row[0]: row[1] for row in cur.fetchall()}
+        
+        cur.close()
+        conn.close()
+        
+        print(f"✅ Analytics data: {total_projects} projects")
+        
+        return jsonify({
+            "summary": {
+                "total_projects": total_projects,
+                "active_projects": status_data.get('Active', 0),
+                "completed_projects": status_data.get('Completed', 0),
+                "completion_rate": round((status_data.get('Completed', 0) / total_projects * 100), 1) if total_projects > 0 else 0,
+                "unique_project_types": len(type_data),
+                "unique_funders": len(funder_data) - 1 if 'No Funder' in funder_data else len(funder_data)
+            },
+            "distributions": {
+                "by_type": type_data,
+                "by_status": status_data,
+                "by_funder": funder_data
+            },
+            "charts": {
+                "type_data": [{"name": k, "value": v} for k, v in type_data.items()],
+                "status_data": [{"name": k, "value": v} for k, v in status_data.items()],
+                "funder_data": [{"name": k, "value": v} for k, v in funder_data.items()]
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in analytics: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 # ================= STATIC FILES FOR UPLOADS =================
 @app.route('/uploads/<filename>')
