@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -26,10 +26,8 @@ import {
   Checkbox,
   FormControlLabel,
   Chip,
-  FormHelperText,
   Tabs,
   Tab,
-  Divider,
   List,
   ListItem,
   ListItemIcon,
@@ -37,7 +35,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  CardHeader
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
@@ -66,6 +63,606 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const API_BASE = "http://localhost:5050";
+
+// Helper functions that can be used anywhere
+const formatDate = (dateString) => {
+  if (!dateString) return "Not specified";
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  } catch {
+    return dateString;
+  }
+};
+
+const formatCurrency = (amount) => {
+  if (!amount || isNaN(amount)) return "R 0.00";
+  return `R ${parseFloat(amount).toLocaleString('en-ZA', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
+const hasValue = (value) => {
+  return value !== null && value !== undefined && value !== "";
+};
+
+// Memoize the TabPanel component to prevent unnecessary re-renders
+const TabPanel = React.memo(({ children, value, index, ...other }) => {
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`beneficiary-tabpanel-${index}`}
+      aria-labelledby={`beneficiary-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+});
+
+// Memoize the BeneficiaryDetailView component
+const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditClick }) => {
+  if (!beneficiary) return null;
+
+  return (
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      fullWidth 
+      maxWidth="md"
+      maxHeight="90vh"
+    >
+      <DialogTitle sx={{ 
+        borderBottom: 1, 
+        borderColor: 'divider', 
+        pb: 2,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <Box>
+          <Typography variant="h5" component="div" fontWeight="bold">
+            {beneficiary.first_name} {beneficiary.last_name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            ID: {beneficiary.id_number || "Not specified"}
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      
+      <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        {/* Personal Information */}
+        <Accordion defaultExpanded>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="bold">
+                Personal Information
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <BadgeIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="ID Number" 
+                    secondary={beneficiary.id_number || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <CalendarTodayIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Date of Birth" 
+                    secondary={formatDate(beneficiary.date_of_birth)}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <PersonIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Gender" 
+                    secondary={beneficiary.gender || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <PublicIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Race" 
+                    secondary={beneficiary.race || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <Typography sx={{ fontSize: '14px', minWidth: 36 }}>Age</Typography>
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Age" 
+                    secondary={beneficiary.age ? `${beneficiary.age} years` : "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <TranslateIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Home Language" 
+                    secondary={beneficiary.home_language || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+                  {beneficiary.youth && (
+                    <Chip 
+                      icon={<PersonIcon />} 
+                      label="Youth" 
+                      color="primary" 
+                      variant="outlined"
+                      size="small"
+                    />
+                  )}
+                  {beneficiary.disability && (
+                    <Chip 
+                      icon={<AccessibilityNewIcon />} 
+                      label={beneficiary.disability_type ? `Disability: ${beneficiary.disability_type}` : "Disability"} 
+                      color="secondary" 
+                      variant="outlined"
+                      size="small"
+                    />
+                  )}
+                  {beneficiary.non_rsa_citizen && (
+                    <Chip 
+                      icon={<PublicIcon />} 
+                      label="Non-RSA Citizen" 
+                      color="warning" 
+                      variant="outlined"
+                      size="small"
+                    />
+                  )}
+                </Box>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Contact Information */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PhoneIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="bold">
+                Contact Information
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <PhoneIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Mobile Phone" 
+                    secondary={beneficiary.mobile_phone || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <EmailIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Email" 
+                    secondary={beneficiary.email || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <PhoneIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Guardian Mobile" 
+                    secondary={beneficiary.parent_guardian_mobile || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <EmailIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Guardian Email" 
+                    secondary={beneficiary.parent_guardian_email || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Address Information */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HomeIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="bold">
+                Address Information
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LocationOnIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Province" 
+                    secondary={beneficiary.learner_province || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LocationOnIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="District Municipality" 
+                    secondary={beneficiary.learner_municipality || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LocationOnIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Residential Area" 
+                    secondary={beneficiary.residential_area || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LocationOnIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Area Type" 
+                    secondary={beneficiary.area_type || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              {hasValue(beneficiary.physical_address_line1) && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Physical Address
+                  </Typography>
+                  <Typography variant="body2">
+                    {beneficiary.physical_address_line1}
+                    {beneficiary.physical_address_line2 && `, ${beneficiary.physical_address_line2}`}
+                    {beneficiary.physical_address_code && `, ${beneficiary.physical_address_code}`}
+                  </Typography>
+                </Grid>
+              )}
+              {hasValue(beneficiary.postal_address_line1) && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Postal Address
+                  </Typography>
+                  <Typography variant="body2">
+                    {beneficiary.postal_address_line1}
+                    {beneficiary.postal_address_line2 && `, ${beneficiary.postal_address_line2}`}
+                    {beneficiary.postal_code && `, ${beneficiary.postal_code}`}
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Programme Information */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SchoolIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="bold">
+                Programme Information
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemText 
+                    primary="Programme Type" 
+                    secondary={beneficiary.learning_programme_type || "Not specified"}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemText 
+                    primary="Status" 
+                    secondary={
+                      <Chip 
+                        label={beneficiary.status || "Active"} 
+                        size="small"
+                        color={beneficiary.status === 'Active' ? 'success' : 
+                               beneficiary.status === 'Completed' ? 'primary' : 'default'}
+                      />
+                    }
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemText 
+                    primary="Start Date" 
+                    secondary={formatDate(beneficiary.programme_start_date)}
+                  />
+                </ListItem>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ListItem disablePadding>
+                  <ListItemText 
+                    primary="Completion Date" 
+                    secondary={formatDate(beneficiary.programme_completion_date)}
+                  />
+                </ListItem>
+              </Grid>
+              {hasValue(beneficiary.programme_outcome) && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Outcome" 
+                      secondary={beneficiary.programme_outcome}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.ofo_code) && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="OFO Code" 
+                      secondary={beneficiary.ofo_code}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.nqf_level) && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="NQF Level" 
+                      secondary={beneficiary.nqf_level}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.qualification_description) && (
+                <Grid item xs={12}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Programme Description" 
+                      secondary={beneficiary.qualification_description}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Employment & Training */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <WorkIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="bold">
+                Employment & Training
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {hasValue(beneficiary.employment_status) && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Employment Status" 
+                      secondary={beneficiary.employment_status}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.current_employer) && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemText 
+                      primary="Current Employer" 
+                      secondary={beneficiary.current_employer}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.training_provider_name) && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Training Provider
+                  </Typography>
+                  <Typography variant="body2">
+                    {beneficiary.training_provider_name}
+                    {beneficiary.training_provider_contact_details && ` | ${beneficiary.training_provider_contact_details}`}
+                  </Typography>
+                </Grid>
+              )}
+              {hasValue(beneficiary.monthly_income) && parseFloat(beneficiary.monthly_income) > 0 && (
+                <Grid item xs={12} sm={6}>
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <MonetizationOnIcon fontSize="small" color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Monthly Income" 
+                      secondary={formatCurrency(beneficiary.monthly_income)}
+                    />
+                  </ListItem>
+                </Grid>
+              )}
+              {hasValue(beneficiary.skills) && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Skills
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {beneficiary.skills.split(',').map((skill, index) => (
+                      <Chip key={index} label={skill.trim()} size="small" />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Financial Information */}
+        {(hasValue(beneficiary.seta_funded) || hasValue(beneficiary.amount_spent_per_learner)) && (
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PaymentIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Financial Information
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {hasValue(beneficiary.seta_funded) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemText 
+                        primary="SETA Funded" 
+                        secondary={
+                          <Chip 
+                            label={beneficiary.seta_funded ? "Yes" : "No"} 
+                            size="small"
+                            color={beneficiary.seta_funded ? "success" : "default"}
+                          />
+                        }
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+                {hasValue(beneficiary.amount_spent_per_learner) && (
+                  <Grid item xs={12} sm={6}>
+                    <ListItem disablePadding>
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        <MonetizationOnIcon fontSize="small" color="action" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Amount Spent" 
+                        secondary={formatCurrency(beneficiary.amount_spent_per_learner)}
+                      />
+                    </ListItem>
+                  </Grid>
+                )}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        )}
+
+        {/* Notes */}
+        {hasValue(beneficiary.notes) && (
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <NotesIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Notes
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                {beneficiary.notes}
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
+        )}
+
+        {/* Metadata */}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="caption" color="text.secondary">
+            Created: {formatDate(beneficiary.created_at)}
+            {beneficiary.updated_at && ` • Updated: ${formatDate(beneficiary.updated_at)}`}
+          </Typography>
+        </Box>
+      </DialogContent>
+      
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button 
+          onClick={() => {
+            onClose();
+            onEditClick();
+          }}
+          variant="outlined"
+          startIcon={<PersonIcon />}
+        >
+          Edit Beneficiary
+        </Button>
+        <Button 
+          onClick={onClose} 
+          variant="contained"
+        >
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
 
 const Beneficiaries = () => {
   const { projectId } = useParams();
@@ -200,6 +797,9 @@ const Beneficiaries = () => {
 
   const [formData, setFormData] = useState(initialFormData);
 
+  // Memoize formData to prevent unnecessary re-renders
+  const memoizedFormData = useMemo(() => formData, [formData]);
+
   useEffect(() => {
     fetchProjectAndBeneficiaries();
   }, [projectId]);
@@ -228,32 +828,36 @@ const Beneficiaries = () => {
     }
   };
 
-  const showSnackbar = (message, severity = "success") => {
+  const showSnackbar = useCallback((message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
-  };
+  }, []);
 
-  const handleInputChange = (e) => {
+  // Fix the handleInputChange to prevent re-renders on every keystroke
+  const handleInputChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     
-    if (type === 'checkbox') {
-      setFormData({
-        ...formData,
-        [name]: checked
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
-    }
-  };
+    // Use functional update to ensure we have the latest state
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  }, []);
 
-  const resetForm = () => {
+  // Fix for Select components
+  const handleSelectChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  const resetForm = useCallback(() => {
     setFormData({ ...initialFormData });
     setSelectedBeneficiary(null);
     setIsEdit(false);
     setActiveTab(0);
-  };
+  }, [initialFormData]);
 
   const handleAddBeneficiary = async () => {
     try {
@@ -490,7 +1094,7 @@ const Beneficiaries = () => {
     setMenuAnchorEl(null);
   };
 
-  const handleEditClick = () => {
+  const handleEditClick = useCallback(() => {
     if (!selectedBeneficiary) return;
 
     // For editing, populate the form with existing data
@@ -515,7 +1119,7 @@ const Beneficiaries = () => {
     setIsEdit(true);
     setOpenDialog(true);
     handleMenuClose();
-  };
+  }, [selectedBeneficiary]);
 
   const handleDeleteClick = () => {
     if (window.confirm(`Are you sure you want to delete ${selectedBeneficiary.first_name} ${selectedBeneficiary.last_name}?`)) {
@@ -533,612 +1137,10 @@ const Beneficiaries = () => {
   };
 
   // Handle card click to show beneficiary details
-  const handleCardClick = (beneficiary) => {
+  const handleCardClick = useCallback((beneficiary) => {
     setSelectedBeneficiary(beneficiary);
     setOpenDetailDialog(true);
-  };
-
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return "Not specified";
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Format currency for display
-  const formatCurrency = (amount) => {
-    if (!amount || isNaN(amount)) return "R 0.00";
-    return `R ${parseFloat(amount).toLocaleString('en-ZA', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
-  };
-
-  // Check if value exists and is not empty
-  const hasValue = (value) => {
-    return value !== null && value !== undefined && value !== "";
-  };
-
-  // Tab panel component
-  const TabPanel = ({ children, value, index, ...other }) => {
-    return (
-      <div
-        role="tabpanel"
-        hidden={value !== index}
-        id={`beneficiary-tabpanel-${index}`}
-        aria-labelledby={`beneficiary-tab-${index}`}
-        {...other}
-      >
-        {value === index && (
-          <Box sx={{ p: 3 }}>
-            {children}
-          </Box>
-        )}
-      </div>
-    );
-  };
-
-  // Detail view component for beneficiary
-  const BeneficiaryDetailView = ({ beneficiary, onClose }) => {
-    if (!beneficiary) return null;
-
-    return (
-      <Dialog 
-        open={openDetailDialog} 
-        onClose={onClose} 
-        fullWidth 
-        maxWidth="md"
-        maxHeight="90vh"
-      >
-        <DialogTitle sx={{ 
-          borderBottom: 1, 
-          borderColor: 'divider', 
-          pb: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Box>
-            <Typography variant="h5" component="div" fontWeight="bold">
-              {beneficiary.first_name} {beneficiary.last_name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ID: {beneficiary.id_number || "Not specified"}
-            </Typography>
-          </Box>
-          <IconButton onClick={onClose} size="small">
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        
-        <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          {/* Personal Information */}
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <PersonIcon color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Personal Information
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <BadgeIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="ID Number" 
-                      secondary={beneficiary.id_number || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <CalendarTodayIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Date of Birth" 
-                      secondary={formatDate(beneficiary.date_of_birth)}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <PersonIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Gender" 
-                      secondary={beneficiary.gender || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <PublicIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Race" 
-                      secondary={beneficiary.race || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <Typography sx={{ fontSize: '14px', minWidth: 36 }}>Age</Typography>
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Age" 
-                      secondary={beneficiary.age ? `${beneficiary.age} years` : "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <TranslateIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Home Language" 
-                      secondary={beneficiary.home_language || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
-                    {beneficiary.youth && (
-                      <Chip 
-                        icon={<PersonIcon />} 
-                        label="Youth" 
-                        color="primary" 
-                        variant="outlined"
-                        size="small"
-                      />
-                    )}
-                    {beneficiary.disability && (
-                      <Chip 
-                        icon={<AccessibilityNewIcon />} 
-                        label={beneficiary.disability_type ? `Disability: ${beneficiary.disability_type}` : "Disability"} 
-                        color="secondary" 
-                        variant="outlined"
-                        size="small"
-                      />
-                    )}
-                    {beneficiary.non_rsa_citizen && (
-                      <Chip 
-                        icon={<PublicIcon />} 
-                        label="Non-RSA Citizen" 
-                        color="warning" 
-                        variant="outlined"
-                        size="small"
-                      />
-                    )}
-                  </Box>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Contact Information */}
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <PhoneIcon color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Contact Information
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <PhoneIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Mobile Phone" 
-                      secondary={beneficiary.mobile_phone || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <EmailIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Email" 
-                      secondary={beneficiary.email || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <PhoneIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Guardian Mobile" 
-                      secondary={beneficiary.parent_guardian_mobile || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <EmailIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Guardian Email" 
-                      secondary={beneficiary.parent_guardian_email || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Address Information */}
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <HomeIcon color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Address Information
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <LocationOnIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Province" 
-                      secondary={beneficiary.learner_province || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <LocationOnIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="District Municipality" 
-                      secondary={beneficiary.learner_municipality || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <LocationOnIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Residential Area" 
-                      secondary={beneficiary.residential_area || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <LocationOnIcon fontSize="small" color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Area Type" 
-                      secondary={beneficiary.area_type || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                {hasValue(beneficiary.physical_address_line1) && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                      Physical Address
-                    </Typography>
-                    <Typography variant="body2">
-                      {beneficiary.physical_address_line1}
-                      {beneficiary.physical_address_line2 && `, ${beneficiary.physical_address_line2}`}
-                      {beneficiary.physical_address_code && `, ${beneficiary.physical_address_code}`}
-                    </Typography>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.postal_address_line1) && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                      Postal Address
-                    </Typography>
-                    <Typography variant="body2">
-                      {beneficiary.postal_address_line1}
-                      {beneficiary.postal_address_line2 && `, ${beneficiary.postal_address_line2}`}
-                      {beneficiary.postal_code && `, ${beneficiary.postal_code}`}
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Programme Information */}
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <SchoolIcon color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Programme Information
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemText 
-                      primary="Programme Type" 
-                      secondary={beneficiary.learning_programme_type || "Not specified"}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemText 
-                      primary="Status" 
-                      secondary={
-                        <Chip 
-                          label={beneficiary.status || "Active"} 
-                          size="small"
-                          color={beneficiary.status === 'Active' ? 'success' : 
-                                 beneficiary.status === 'Completed' ? 'primary' : 'default'}
-                        />
-                      }
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemText 
-                      primary="Start Date" 
-                      secondary={formatDate(beneficiary.programme_start_date)}
-                    />
-                  </ListItem>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ListItem disablePadding>
-                    <ListItemText 
-                      primary="Completion Date" 
-                      secondary={formatDate(beneficiary.programme_completion_date)}
-                    />
-                  </ListItem>
-                </Grid>
-                {hasValue(beneficiary.programme_outcome) && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="Outcome" 
-                        secondary={beneficiary.programme_outcome}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.ofo_code) && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="OFO Code" 
-                        secondary={beneficiary.ofo_code}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.nqf_level) && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="NQF Level" 
-                        secondary={beneficiary.nqf_level}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.qualification_description) && (
-                  <Grid item xs={12}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="Programme Description" 
-                        secondary={beneficiary.qualification_description}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Employment & Training */}
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WorkIcon color="primary" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Employment & Training
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                {hasValue(beneficiary.employment_status) && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="Employment Status" 
-                        secondary={beneficiary.employment_status}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.current_employer) && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemText 
-                        primary="Current Employer" 
-                        secondary={beneficiary.current_employer}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.training_provider_name) && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                      Training Provider
-                    </Typography>
-                    <Typography variant="body2">
-                      {beneficiary.training_provider_name}
-                      {beneficiary.training_provider_contact_details && ` | ${beneficiary.training_provider_contact_details}`}
-                    </Typography>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.monthly_income) && parseFloat(beneficiary.monthly_income) > 0 && (
-                  <Grid item xs={12} sm={6}>
-                    <ListItem disablePadding>
-                      <ListItemIcon sx={{ minWidth: 36 }}>
-                        <MonetizationOnIcon fontSize="small" color="action" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Monthly Income" 
-                        secondary={formatCurrency(beneficiary.monthly_income)}
-                      />
-                    </ListItem>
-                  </Grid>
-                )}
-                {hasValue(beneficiary.skills) && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                      Skills
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {beneficiary.skills.split(',').map((skill, index) => (
-                        <Chip key={index} label={skill.trim()} size="small" />
-                      ))}
-                    </Box>
-                  </Grid>
-                )}
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Financial Information */}
-          {(hasValue(beneficiary.seta_funded) || hasValue(beneficiary.amount_spent_per_learner)) && (
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PaymentIcon color="primary" />
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Financial Information
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={2}>
-                  {hasValue(beneficiary.seta_funded) && (
-                    <Grid item xs={12} sm={6}>
-                      <ListItem disablePadding>
-                        <ListItemText 
-                          primary="SETA Funded" 
-                          secondary={
-                            <Chip 
-                              label={beneficiary.seta_funded ? "Yes" : "No"} 
-                              size="small"
-                              color={beneficiary.seta_funded ? "success" : "default"}
-                            />
-                          }
-                        />
-                      </ListItem>
-                    </Grid>
-                  )}
-                  {hasValue(beneficiary.amount_spent_per_learner) && (
-                    <Grid item xs={12} sm={6}>
-                      <ListItem disablePadding>
-                        <ListItemIcon sx={{ minWidth: 36 }}>
-                          <MonetizationOnIcon fontSize="small" color="action" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Amount Spent" 
-                          secondary={formatCurrency(beneficiary.amount_spent_per_learner)}
-                        />
-                      </ListItem>
-                    </Grid>
-                  )}
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          )}
-
-          {/* Notes */}
-          {hasValue(beneficiary.notes) && (
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <NotesIcon color="primary" />
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Notes
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {beneficiary.notes}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          )}
-
-          {/* Metadata */}
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">
-              Created: {formatDate(beneficiary.created_at)}
-              {beneficiary.updated_at && ` • Updated: ${formatDate(beneficiary.updated_at)}`}
-            </Typography>
-          </Box>
-        </DialogContent>
-        
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button 
-            onClick={() => {
-              setOpenDetailDialog(false);
-              handleEditClick();
-            }}
-            variant="outlined"
-            startIcon={<PersonIcon />}
-          >
-            Edit Beneficiary
-          </Button>
-          <Button 
-            onClick={onClose} 
-            variant="contained"
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -1396,13 +1398,13 @@ const Beneficiaries = () => {
                 <TextField
                   label="First Name *"
                   name="first_name"
-                  value={formData.first_name}
+                  value={memoizedFormData.first_name}
                   onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.first_name.trim()}
-                  helperText={!formData.first_name.trim() ? "Required" : ""}
+                  error={!memoizedFormData.first_name.trim()}
+                  helperText={!memoizedFormData.first_name.trim() ? "Required" : ""}
                 />
               </Grid>
               
@@ -1410,13 +1412,13 @@ const Beneficiaries = () => {
                 <TextField
                   label="Last Name *"
                   name="last_name"
-                  value={formData.last_name}
+                  value={memoizedFormData.last_name}
                   onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.last_name.trim()}
-                  helperText={!formData.last_name.trim() ? "Required" : ""}
+                  error={!memoizedFormData.last_name.trim()}
+                  helperText={!memoizedFormData.last_name.trim() ? "Required" : ""}
                 />
               </Grid>
               
@@ -1424,7 +1426,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Initials"
                   name="initials"
-                  value={formData.initials}
+                  value={memoizedFormData.initials}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1435,12 +1437,12 @@ const Beneficiaries = () => {
                 <TextField
                   label="ID Number *"
                   name="id_number"
-                  value={formData.id_number}
+                  value={memoizedFormData.id_number}
                   onChange={handleInputChange}
                   fullWidth
                   required
                   size="small"
-                  error={!formData.id_number.trim()}
+                  error={!memoizedFormData.id_number.trim()}
                   helperText="13-digit South African ID"
                 />
               </Grid>
@@ -1450,7 +1452,7 @@ const Beneficiaries = () => {
                   label="Date of Birth"
                   name="date_of_birth"
                   type="date"
-                  value={formData.date_of_birth}
+                  value={memoizedFormData.date_of_birth}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1463,7 +1465,7 @@ const Beneficiaries = () => {
                   label="Age"
                   name="age"
                   type="number"
-                  value={formData.age}
+                  value={memoizedFormData.age}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1475,8 +1477,8 @@ const Beneficiaries = () => {
                   <InputLabel>Gender *</InputLabel>
                   <Select
                     name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.gender}
+                    onChange={handleSelectChange}
                     label="Gender *"
                   >
                     <MenuItem value=""><em>Select Gender</em></MenuItem>
@@ -1492,8 +1494,8 @@ const Beneficiaries = () => {
                   <InputLabel>Race</InputLabel>
                   <Select
                     name="race"
-                    value={formData.race}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.race}
+                    onChange={handleSelectChange}
                     label="Race"
                   >
                     <MenuItem value=""><em>Select Race</em></MenuItem>
@@ -1511,8 +1513,8 @@ const Beneficiaries = () => {
                   <InputLabel>Home Language</InputLabel>
                   <Select
                     name="home_language"
-                    value={formData.home_language}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.home_language}
+                    onChange={handleSelectChange}
                     label="Home Language"
                   >
                     <MenuItem value="English">English</MenuItem>
@@ -1530,7 +1532,7 @@ const Beneficiaries = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={formData.youth}
+                      checked={memoizedFormData.youth}
                       onChange={handleInputChange}
                       name="youth"
                       color="primary"
@@ -1542,7 +1544,7 @@ const Beneficiaries = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={formData.disability}
+                      checked={memoizedFormData.disability}
                       onChange={handleInputChange}
                       name="disability"
                       color="primary"
@@ -1554,7 +1556,7 @@ const Beneficiaries = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={formData.non_rsa_citizen}
+                      checked={memoizedFormData.non_rsa_citizen}
                       onChange={handleInputChange}
                       name="non_rsa_citizen"
                       color="primary"
@@ -1564,12 +1566,12 @@ const Beneficiaries = () => {
                 />
               </Grid>
               
-              {formData.disability && (
+              {memoizedFormData.disability && (
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Disability Type"
                     name="disability_type"
-                    value={formData.disability_type}
+                    value={memoizedFormData.disability_type}
                     onChange={handleInputChange}
                     fullWidth
                     size="small"
@@ -1586,7 +1588,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Mobile Phone"
                   name="mobile_phone"
-                  value={formData.mobile_phone}
+                  value={memoizedFormData.mobile_phone}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1598,7 +1600,7 @@ const Beneficiaries = () => {
                   label="Email"
                   name="email_address"
                   type="email"
-                  value={formData.email_address}
+                  value={memoizedFormData.email_address}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1609,7 +1611,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Guardian Mobile"
                   name="parent_guardian_mobile"
-                  value={formData.parent_guardian_mobile}
+                  value={memoizedFormData.parent_guardian_mobile}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1621,7 +1623,7 @@ const Beneficiaries = () => {
                   label="Guardian Email"
                   name="parent_guardian_email"
                   type="email"
-                  value={formData.parent_guardian_email}
+                  value={memoizedFormData.parent_guardian_email}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1638,7 +1640,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Province"
                   name="learner_province"
-                  value={formData.learner_province}
+                  value={memoizedFormData.learner_province}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1649,7 +1651,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="District Municipality"
                   name="learner_district_municipality"
-                  value={formData.learner_district_municipality}
+                  value={memoizedFormData.learner_district_municipality}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1660,7 +1662,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Local Municipality"
                   name="learner_local_municipality"
-                  value={formData.learner_local_municipality}
+                  value={memoizedFormData.learner_local_municipality}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1671,7 +1673,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Residential Area"
                   name="residential_area"
-                  value={formData.residential_area}
+                  value={memoizedFormData.residential_area}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -1685,8 +1687,8 @@ const Beneficiaries = () => {
                   <InputLabel>Area Type</InputLabel>
                   <Select
                     name="area_type"
-                    value={formData.area_type}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.area_type}
+                    onChange={handleSelectChange}
                     label="Area Type"
                   >
                     <MenuItem value=""><em>Select Area Type</em></MenuItem>
@@ -1706,7 +1708,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Address Line 1"
                   name="physical_address_line1"
-                  value={formData.physical_address_line1}
+                  value={memoizedFormData.physical_address_line1}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1717,7 +1719,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Address Line 2"
                   name="physical_address_line2"
-                  value={formData.physical_address_line2}
+                  value={memoizedFormData.physical_address_line2}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1728,7 +1730,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Postal Code"
                   name="postal_code"
-                  value={formData.postal_code}
+                  value={memoizedFormData.postal_code}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1739,7 +1741,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Address Code"
                   name="physical_address_code"
-                  value={formData.physical_address_code}
+                  value={memoizedFormData.physical_address_code}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1756,8 +1758,8 @@ const Beneficiaries = () => {
                   <InputLabel>Learning Programme Type</InputLabel>
                   <Select
                     name="type_of_learning_programme"
-                    value={formData.type_of_learning_programme}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.type_of_learning_programme}
+                    onChange={handleSelectChange}
                     label="Learning Programme Type"
                   >
                     <MenuItem value="Training">Training</MenuItem>
@@ -1774,8 +1776,8 @@ const Beneficiaries = () => {
                   <InputLabel>Status</InputLabel>
                   <Select
                     name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.status}
+                    onChange={handleSelectChange}
                     label="Status"
                   >
                     <MenuItem value="Active">Active</MenuItem>
@@ -1792,7 +1794,7 @@ const Beneficiaries = () => {
                   label="Programme Start Date"
                   name="programme_start_date"
                   type="date"
-                  value={formData.programme_start_date}
+                  value={memoizedFormData.programme_start_date}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1805,7 +1807,7 @@ const Beneficiaries = () => {
                   label="Programme Completion Date"
                   name="programme_completion_date"
                   type="date"
-                  value={formData.programme_completion_date}
+                  value={memoizedFormData.programme_completion_date}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1818,7 +1820,7 @@ const Beneficiaries = () => {
                   label="Certificate Issue Date"
                   name="certificate_issue_date"
                   type="date"
-                  value={formData.certificate_issue_date}
+                  value={memoizedFormData.certificate_issue_date}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1831,8 +1833,8 @@ const Beneficiaries = () => {
                   <InputLabel>Programme Outcome</InputLabel>
                   <Select
                     name="programme_outcome"
-                    value={formData.programme_outcome}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.programme_outcome}
+                    onChange={handleSelectChange}
                     label="Programme Outcome"
                   >
                     <MenuItem value=""><em>Select Outcome</em></MenuItem>
@@ -1848,7 +1850,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="OFO Code"
                   name="ofo_code"
-                  value={formData.ofo_code}
+                  value={memoizedFormData.ofo_code}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1859,7 +1861,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="NQF Level"
                   name="nqf_level"
-                  value={formData.nqf_level}
+                  value={memoizedFormData.nqf_level}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1870,7 +1872,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Qualification ID"
                   name="qualification_id"
-                  value={formData.qualification_id}
+                  value={memoizedFormData.qualification_id}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1881,7 +1883,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Learnership ID"
                   name="learnership_id"
-                  value={formData.learnership_id}
+                  value={memoizedFormData.learnership_id}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1892,7 +1894,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Programme Description"
                   name="programme_description"
-                  value={formData.programme_description}
+                  value={memoizedFormData.programme_description}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -1917,8 +1919,8 @@ const Beneficiaries = () => {
                   <InputLabel>Employment Status</InputLabel>
                   <Select
                     name="employment_status"
-                    value={formData.employment_status}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.employment_status}
+                    onChange={handleSelectChange}
                     label="Employment Status"
                   >
                     <MenuItem value=""><em>Select Status</em></MenuItem>
@@ -1934,7 +1936,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Current Employer"
                   name="current_employer"
-                  value={formData.current_employer}
+                  value={memoizedFormData.current_employer}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1945,7 +1947,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Employer Name"
                   name="employer_name"
-                  value={formData.employer_name}
+                  value={memoizedFormData.employer_name}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1956,7 +1958,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Employer SDL Number"
                   name="employer_sdl_number"
-                  value={formData.employer_sdl_number}
+                  value={memoizedFormData.employer_sdl_number}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1967,7 +1969,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Employer Contact Details"
                   name="employer_contact_details"
-                  value={formData.employer_contact_details}
+                  value={memoizedFormData.employer_contact_details}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -1986,7 +1988,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Name"
                   name="training_provider_name"
-                  value={formData.training_provider_name}
+                  value={memoizedFormData.training_provider_name}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -1997,7 +1999,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider SDL Number"
                   name="training_provider_sdl_number"
-                  value={formData.training_provider_sdl_number}
+                  value={memoizedFormData.training_provider_sdl_number}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2009,8 +2011,8 @@ const Beneficiaries = () => {
                   <InputLabel>Provider Type</InputLabel>
                   <Select
                     name="training_provider_type"
-                    value={formData.training_provider_type}
-                    onChange={handleInputChange}
+                    value={memoizedFormData.training_provider_type}
+                    onChange={handleSelectChange}
                     label="Provider Type"
                   >
                     <MenuItem value=""><em>Select Type</em></MenuItem>
@@ -2024,7 +2026,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Province"
                   name="training_provider_province"
-                  value={formData.training_provider_province}
+                  value={memoizedFormData.training_provider_province}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2035,7 +2037,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Code"
                   name="training_provider_code"
-                  value={formData.training_provider_code}
+                  value={memoizedFormData.training_provider_code}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2046,7 +2048,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider ETQA ID"
                   name="training_provider_etqa_id"
-                  value={formData.training_provider_etqa_id}
+                  value={memoizedFormData.training_provider_etqa_id}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2057,7 +2059,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Postal Address"
                   name="training_provider_postal_address"
-                  value={formData.training_provider_postal_address}
+                  value={memoizedFormData.training_provider_postal_address}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -2070,7 +2072,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Physical Address"
                   name="training_provider_physical_address"
-                  value={formData.training_provider_physical_address}
+                  value={memoizedFormData.training_provider_physical_address}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -2083,7 +2085,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Training Provider Contact Details"
                   name="training_provider_contact_details"
-                  value={formData.training_provider_contact_details}
+                  value={memoizedFormData.training_provider_contact_details}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -2097,7 +2099,7 @@ const Beneficiaries = () => {
                   label="Accreditation Start Date"
                   name="training_provider_accreditation_start_date"
                   type="date"
-                  value={formData.training_provider_accreditation_start_date}
+                  value={memoizedFormData.training_provider_accreditation_start_date}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2114,7 +2116,7 @@ const Beneficiaries = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={formData.seta_industry_funded}
+                      checked={memoizedFormData.seta_industry_funded}
                       onChange={handleInputChange}
                       name="seta_industry_funded"
                       color="primary"
@@ -2129,7 +2131,7 @@ const Beneficiaries = () => {
                   label="Amount Spent per Learner"
                   name="amount_spent_per_learner"
                   type="number"
-                  value={formData.amount_spent_per_learner}
+                  value={memoizedFormData.amount_spent_per_learner}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2144,7 +2146,7 @@ const Beneficiaries = () => {
                   label="Monthly Income"
                   name="monthly_income"
                   type="number"
-                  value={formData.monthly_income}
+                  value={memoizedFormData.monthly_income}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2158,7 +2160,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Agreement/MOA Number"
                   name="agreement_moa_number"
-                  value={formData.agreement_moa_number}
+                  value={memoizedFormData.agreement_moa_number}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2169,7 +2171,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Project Number"
                   name="project_number"
-                  value={formData.project_number}
+                  value={memoizedFormData.project_number}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2180,7 +2182,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Activity Number"
                   name="activity_number"
-                  value={formData.activity_number}
+                  value={memoizedFormData.activity_number}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2191,7 +2193,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="App Sub Programme"
                   name="app_sub_programme"
-                  value={formData.app_sub_programme}
+                  value={memoizedFormData.app_sub_programme}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2202,7 +2204,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Unit Standard ID"
                   name="unit_standard_id"
-                  value={formData.unit_standard_id}
+                  value={memoizedFormData.unit_standard_id}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2213,7 +2215,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Last School EMIS"
                   name="last_school_emis"
-                  value={formData.last_school_emis}
+                  value={memoizedFormData.last_school_emis}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2224,7 +2226,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Last School Year"
                   name="last_school_year"
-                  value={formData.last_school_year}
+                  value={memoizedFormData.last_school_year}
                   onChange={handleInputChange}
                   fullWidth
                   size="small"
@@ -2235,7 +2237,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Skills"
                   name="skills"
-                  value={formData.skills}
+                  value={memoizedFormData.skills}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -2248,7 +2250,7 @@ const Beneficiaries = () => {
                 <TextField
                   label="Notes"
                   name="notes"
-                  value={formData.notes}
+                  value={memoizedFormData.notes}
                   onChange={handleInputChange}
                   fullWidth
                   multiline
@@ -2286,7 +2288,7 @@ const Beneficiaries = () => {
               onClick={handleSave} 
               variant="contained" 
               color="warning"
-              disabled={!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()}
+              disabled={!memoizedFormData.first_name.trim() || !memoizedFormData.last_name.trim() || !memoizedFormData.id_number.trim()}
             >
               {isEdit ? "Update" : "Save"} Beneficiary
             </Button>
@@ -2298,10 +2300,12 @@ const Beneficiaries = () => {
       {selectedBeneficiary && (
         <BeneficiaryDetailView 
           beneficiary={selectedBeneficiary}
+          open={openDetailDialog}
           onClose={() => {
             setOpenDetailDialog(false);
             setSelectedBeneficiary(null);
           }}
+          onEditClick={handleEditClick}
         />
       )}
 
