@@ -1352,6 +1352,132 @@ def get_project_analytics():
     except Exception as e:
         print(f"❌ Error in analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
+ # ================= REPLACEMENTS ROUTES =================
+
+@app.route("/api/projects/<int:project_id>/beneficiaries/replace", methods=["POST", "OPTIONS"])
+def replace_beneficiary(project_id):
+    if request.method == "OPTIONS":
+        return '', 200
+
+    try:
+        data = request.json
+        replaced_id = data.get("replaced_beneficiary_id")
+        replacement_id = data.get("replacement_beneficiary_id")
+        reason = data.get("reason", "")
+
+        if not replaced_id or not replacement_id:
+            return jsonify({"error": "Missing beneficiary IDs"}), 400
+
+        if replaced_id == replacement_id:
+            return jsonify({"error": "A beneficiary cannot replace themselves"}), 400
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+
+        cur = conn.cursor()
+
+        # Start transaction
+        cur.execute("BEGIN;")
+
+        # Check both beneficiaries exist and belong to the same project
+        cur.execute("""
+            SELECT id FROM beneficiaries
+            WHERE id IN (%s, %s) AND project_id = %s;
+        """, (replaced_id, replacement_id, project_id))
+
+        if cur.rowcount != 2:
+            conn.rollback()
+            return jsonify({"error": "Invalid beneficiaries or project mismatch"}), 400
+
+        # Insert replacement record
+        cur.execute("""
+            INSERT INTO replacements (
+                project_id,
+                replaced_beneficiary_id,
+                replacement_beneficiary_id,
+                reason
+            )
+            VALUES (%s, %s, %s, %s);
+        """, (project_id, replaced_id, replacement_id, reason))
+
+        # Update old beneficiary
+        cur.execute("""
+            UPDATE beneficiaries
+            SET beneficiary_status = 'Replaced', status = 'Inactive'
+            WHERE id = %s;
+        """, (replaced_id,))
+
+        # Update new beneficiary
+        cur.execute("""
+            UPDATE beneficiaries
+            SET beneficiary_status = 'Replacement', status = 'Active'
+            WHERE id = %s;
+        """, (replacement_id,))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"message": "Beneficiary replaced successfully"}), 201
+
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return jsonify({"error": "This beneficiary has already been replaced"}), 409
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print("❌ Replacement error:", e)
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/projects/<int:project_id>/replacements", methods=["GET", "OPTIONS"])
+def get_project_replacements(project_id):
+    if request.method == "OPTIONS":
+        return '', 200
+
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                r.id,
+                r.replacement_date,
+                r.reason,
+                b1.learner_names || ' ' || b1.learner_surname AS replaced_beneficiary,
+                b2.learner_names || ' ' || b2.learner_surname AS replacement_beneficiary
+            FROM replacements r
+            JOIN beneficiaries b1 ON r.replaced_beneficiary_id = b1.id
+            JOIN beneficiaries b2 ON r.replacement_beneficiary_id = b2.id
+            WHERE r.project_id = %s
+            ORDER BY r.replacement_date DESC;
+        """, (project_id,))
+
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        results = []
+        for row in rows:
+            results.append({
+                "replacement_id": row[0],
+                "replacement_date": format_date(row[1]),
+                "reason": row[2],
+                "replaced_beneficiary": row[3],
+                "replacement_beneficiary": row[4]
+            })
+
+        return jsonify(results)
+
+    except Exception as e:
+        print("❌ Fetch replacements error:", e)
+        return jsonify({"error": str(e)}), 500
+
 
 # ================= STATIC FILES FOR UPLOADS =================
 @app.route('/uploads/<filename>')

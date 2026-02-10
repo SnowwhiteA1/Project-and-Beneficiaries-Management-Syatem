@@ -35,6 +35,13 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
@@ -59,6 +66,11 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import NotesIcon from "@mui/icons-material/Notes";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CloseIcon from "@mui/icons-material/Close";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import HistoryIcon from "@mui/icons-material/History";
+import UpdateIcon from "@mui/icons-material/Update";
+import PersonOffIcon from "@mui/icons-material/PersonOff";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -110,7 +122,7 @@ const TabPanel = React.memo(({ children, value, index, ...other }) => {
 });
 
 // Memoize the BeneficiaryDetailView component
-const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditClick }) => {
+const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditClick, onReplaceClick }) => {
   if (!beneficiary) return null;
 
   return (
@@ -133,9 +145,20 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
           <Typography variant="h5" component="div" fontWeight="bold">
             {beneficiary.first_name} {beneficiary.last_name}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            ID: {beneficiary.id_number || "Not specified"}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              ID: {beneficiary.id_number || "Not specified"}
+            </Typography>
+            <Chip 
+              label={beneficiary.beneficiary_status || "Current"}
+              size="small"
+              color={
+                beneficiary.beneficiary_status === 'Current' ? 'success' :
+                beneficiary.beneficiary_status === 'Replaced' ? 'error' :
+                beneficiary.beneficiary_status === 'Replacement' ? 'warning' : 'default'
+              }
+            />
+          </Box>
         </Box>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
@@ -643,6 +666,19 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
       </DialogContent>
       
       <DialogActions sx={{ px: 3, py: 2 }}>
+        {beneficiary.beneficiary_status === 'Current' && beneficiary.status === 'Active' && (
+          <Button 
+            onClick={() => {
+              onClose();
+              onReplaceClick();
+            }}
+            variant="outlined"
+            color="warning"
+            startIcon={<SwapHorizIcon />}
+          >
+            Replace Beneficiary
+          </Button>
+        )}
         <Button 
           onClick={() => {
             onClose();
@@ -653,6 +689,123 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
         >
           Edit Beneficiary
         </Button>
+        <Button 
+          onClick={onClose} 
+          variant="contained"
+        >
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
+
+// Replacements History Component
+const ReplacementsHistory = React.memo(({ replacements, open, onClose }) => {
+  return (
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      fullWidth 
+      maxWidth="lg"
+    >
+      <DialogTitle sx={{ 
+        borderBottom: 1, 
+        borderColor: 'divider', 
+        pb: 2,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <Box>
+          <Typography variant="h5" component="div" fontWeight="bold">
+            Replacement History
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Track all beneficiary replacements
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      
+      <DialogContent dividers>
+        {replacements.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <SwapHorizIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No Replacements Found
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              No beneficiaries have been replaced in this project yet.
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Replaced Beneficiary</TableCell>
+                  <TableCell>Replacement Beneficiary</TableCell>
+                  <TableCell>Reason</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {replacements.map((replacement) => (
+                  <TableRow key={replacement.id} hover>
+                    <TableCell>
+                      {formatDate(replacement.replacement_date)}
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PersonOffIcon color="error" fontSize="small" />
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {replacement.replaced_first_name} {replacement.replaced_last_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            ID: {replacement.replaced_id_number}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PersonAddIcon color="success" fontSize="small" />
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {replacement.replacement_first_name} {replacement.replacement_last_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            ID: {replacement.replacement_id_number}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {replacement.reason || "No reason provided"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label="Completed"
+                        size="small"
+                        color="success"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </DialogContent>
+      
+      <DialogActions sx={{ px: 3, py: 2 }}>
         <Button 
           onClick={onClose} 
           variant="contained"
@@ -678,6 +831,18 @@ const Beneficiaries = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+
+  // NEW STATES FOR REPLACEMENTS
+  const [openReplaceDialog, setOpenReplaceDialog] = useState(false);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [replacements, setReplacements] = useState([]);
+  const [availableReplacements, setAvailableReplacements] = useState([]);
+  const [replacementForm, setReplacementForm] = useState({
+    replaced_beneficiary_id: "",
+    replacement_beneficiary_id: "",
+    reason: ""
+  });
+  const [replacementLoading, setReplacementLoading] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -820,6 +985,9 @@ const Beneficiaries = () => {
       );
       setBeneficiaries(beneficiariesRes.data);
       
+      // Fetch replacements history
+      await fetchReplacementsHistory();
+      
     } catch (err) {
       console.error("Error fetching data:", err);
       showSnackbar("Failed to load data", "error");
@@ -828,9 +996,110 @@ const Beneficiaries = () => {
     }
   };
 
+  const fetchReplacementsHistory = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/projects/${projectId}/replacements`);
+      setReplacements(res.data);
+    } catch (err) {
+      console.error("Error fetching replacements:", err);
+    }
+  };
+
   const showSnackbar = useCallback((message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
   }, []);
+
+  // NEW FUNCTION: Handle opening replacement dialog
+  const handleOpenReplaceDialog = useCallback(async (beneficiary) => {
+    try {
+      setSelectedBeneficiary(beneficiary);
+      setReplacementForm({
+        replaced_beneficiary_id: beneficiary.id,
+        replacement_beneficiary_id: "",
+        reason: ""
+      });
+      
+      // Fetch available beneficiaries for replacement (Active beneficiaries who are not already replaced)
+      const available = beneficiaries.filter(b => 
+        b.id !== beneficiary.id && 
+        b.status === 'Active' && 
+        b.beneficiary_status === 'Current'
+      );
+      
+      setAvailableReplacements(available);
+      setOpenReplaceDialog(true);
+    } catch (err) {
+      console.error("Error preparing replacement:", err);
+      showSnackbar("Error preparing replacement", "error");
+    }
+  }, [beneficiaries, showSnackbar]);
+
+  // NEW FUNCTION: Handle replacement submission
+  const handleReplaceBeneficiary = async () => {
+    try {
+      if (!replacementForm.replacement_beneficiary_id) {
+        showSnackbar("Please select a replacement beneficiary", "error");
+        return;
+      }
+
+      if (!replacementForm.reason.trim()) {
+        showSnackbar("Please provide a reason for replacement", "error");
+        return;
+      }
+
+      setReplacementLoading(true);
+
+      const response = await axios.post(
+        `${API_BASE}/api/projects/${projectId}/beneficiaries/replace`,
+        replacementForm,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      showSnackbar("Beneficiary replaced successfully!");
+      
+      // Reset forms and close dialogs
+      setOpenReplaceDialog(false);
+      setOpenDetailDialog(false);
+      setReplacementForm({
+        replaced_beneficiary_id: "",
+        replacement_beneficiary_id: "",
+        reason: ""
+      });
+      
+      // Refresh data
+      await fetchProjectAndBeneficiaries();
+      
+    } catch (err) {
+      console.error("Error replacing beneficiary:", err);
+      let errorMessage = "Failed to replace beneficiary. ";
+      if (err.response?.data?.error) {
+        errorMessage += err.response.data.error;
+      } else if (err.response?.status === 400) {
+        errorMessage = "Invalid replacement request";
+      } else if (err.response?.status === 404) {
+        errorMessage = "Beneficiary not found";
+      }
+      
+      showSnackbar(errorMessage, "error");
+    } finally {
+      setReplacementLoading(false);
+    }
+  };
+
+  // NEW FUNCTION: Handle replacements history dialog
+  const handleOpenHistoryDialog = async () => {
+    try {
+      await fetchReplacementsHistory();
+      setOpenHistoryDialog(true);
+    } catch (err) {
+      console.error("Error fetching replacements history:", err);
+      showSnackbar("Error loading replacements history", "error");
+    }
+  };
 
   // Fix the handleInputChange to prevent re-renders on every keystroke
   const handleInputChange = useCallback((e) => {
@@ -847,6 +1116,15 @@ const Beneficiaries = () => {
   const handleSelectChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  // NEW FUNCTION: Handle replacement form changes
+  const handleReplacementFormChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setReplacementForm(prev => ({
       ...prev,
       [name]: value
     }));
@@ -987,8 +1265,6 @@ const Beneficiaries = () => {
         beneficiary_status: formData.beneficiary_status || "Current"
       };
 
-      console.log("Sending data to backend:", dataToSend);
-
       const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`,
         dataToSend,
@@ -999,7 +1275,6 @@ const Beneficiaries = () => {
         }
       );
 
-      console.log("Beneficiary added successfully:", response.data);
       showSnackbar("Beneficiary added successfully!");
       setOpenDialog(false);
       resetForm();
@@ -1185,21 +1460,34 @@ const Beneficiaries = () => {
                 {beneficiaries.length} Beneficiary{beneficiaries.length !== 1 ? 's' : ''}
               </Typography>
             </Box>
+            {replacements.length > 0 && (
+              <Button
+                startIcon={<HistoryIcon />}
+                onClick={handleOpenHistoryDialog}
+                variant="outlined"
+                size="small"
+                color="info"
+              >
+                View Replacements ({replacements.length})
+              </Button>
+            )}
           </Box>
         </Box>
         
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            resetForm();
-            setOpenDialog(true);
-          }}
-          size="large"
-        >
-          Add New Beneficiary
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              resetForm();
+              setOpenDialog(true);
+            }}
+            size="large"
+          >
+            Add New Beneficiary
+          </Button>
+        </Box>
       </Box>
 
       {/* BENEFICIARIES GRID */}
@@ -1238,7 +1526,12 @@ const Beneficiaries = () => {
                   '&:hover': { 
                     boxShadow: 6,
                     transform: 'translateY(-4px)'
-                  }
+                  },
+                  borderLeft: 5,
+                  borderColor: 
+                    beneficiary.beneficiary_status === 'Replaced' ? 'error.main' :
+                    beneficiary.beneficiary_status === 'Replacement' ? 'warning.main' :
+                    'primary.main'
                 }}
                 onClick={() => handleCardClick(beneficiary)}
               >
@@ -1265,7 +1558,10 @@ const Beneficiaries = () => {
                   <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
                     <Avatar 
                       sx={{ 
-                        bgcolor: "primary.main", 
+                        bgcolor: 
+                          beneficiary.beneficiary_status === 'Replaced' ? 'error.main' :
+                          beneficiary.beneficiary_status === 'Replacement' ? 'warning.main' :
+                          'primary.main', 
                         mr: 2, 
                         width: 56, 
                         height: 56,
@@ -1275,13 +1571,35 @@ const Beneficiaries = () => {
                     >
                       {beneficiary.first_name?.charAt(0)?.toUpperCase() || "B"}
                     </Avatar>
-                    <Box>
-                      <Typography variant="h6" fontWeight="bold" noWrap>
-                        {beneficiary.first_name} {beneficiary.last_name}
-                      </Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Typography variant="h6" fontWeight="bold" noWrap>
+                          {beneficiary.first_name} {beneficiary.last_name}
+                        </Typography>
+                        {beneficiary.beneficiary_status === 'Replaced' && (
+                          <Tooltip title="This beneficiary has been replaced">
+                            <PersonOffIcon fontSize="small" color="error" />
+                          </Tooltip>
+                        )}
+                        {beneficiary.beneficiary_status === 'Replacement' && (
+                          <Tooltip title="This is a replacement beneficiary">
+                            <UpdateIcon fontSize="small" color="warning" />
+                          </Tooltip>
+                        )}
+                      </Box>
                       <Typography variant="body2" color="text.secondary">
                         ID: {beneficiary.id_number || "N/A"}
                       </Typography>
+                      <Chip 
+                        label={beneficiary.beneficiary_status || "Current"}
+                        size="small"
+                        sx={{ mt: 0.5 }}
+                        color={
+                          beneficiary.beneficiary_status === 'Current' ? 'success' :
+                          beneficiary.beneficiary_status === 'Replaced' ? 'error' :
+                          beneficiary.beneficiary_status === 'Replacement' ? 'warning' : 'default'
+                        }
+                      />
                     </Box>
                   </Box>
 
@@ -2295,6 +2613,119 @@ const Beneficiaries = () => {
         </DialogActions>
       </Dialog>
 
+      {/* REPLACEMENT DIALOG */}
+      <Dialog 
+        open={openReplaceDialog} 
+        onClose={() => setOpenReplaceDialog(false)} 
+        fullWidth 
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SwapHorizIcon color="warning" />
+            <Typography variant="h6" component="div" fontWeight="bold">
+              Replace Beneficiary
+            </Typography>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent dividers sx={{ pt: 3 }}>
+          {selectedBeneficiary && (
+            <Box sx={{ mb: 3, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="warning.dark" gutterBottom>
+                Replacing this beneficiary:
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: 'warning.main' }}>
+                  {selectedBeneficiary.first_name?.charAt(0)?.toUpperCase()}
+                </Avatar>
+                <Box>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedBeneficiary.first_name} {selectedBeneficiary.last_name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ID: {selectedBeneficiary.id_number}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
+          
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="replacement-beneficiary-label">
+              Select Replacement Beneficiary *
+            </InputLabel>
+            <Select
+              labelId="replacement-beneficiary-label"
+              name="replacement_beneficiary_id"
+              value={replacementForm.replacement_beneficiary_id}
+              onChange={handleReplacementFormChange}
+              label="Select Replacement Beneficiary *"
+              required
+            >
+              <MenuItem value="">
+                <em>Select a beneficiary</em>
+              </MenuItem>
+              {availableReplacements.map((beneficiary) => (
+                <MenuItem key={beneficiary.id} value={beneficiary.id}>
+                  {beneficiary.first_name} {beneficiary.last_name} 
+                  {beneficiary.id_number && ` (ID: ${beneficiary.id_number})`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <TextField
+            label="Reason for Replacement *"
+            name="reason"
+            value={replacementForm.reason}
+            onChange={handleReplacementFormChange}
+            fullWidth
+            multiline
+            rows={4}
+            placeholder="Explain why this beneficiary needs to be replaced (e.g., dropped out, health issues, etc.)"
+            required
+          />
+          
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+            <Typography variant="body2" color="info.dark">
+              <strong>Note:</strong> This action will:
+              <ul style={{ marginTop: 8, marginBottom: 8, paddingLeft: 20 }}>
+                <li>Mark the current beneficiary as "Replaced" with status "Inactive"</li>
+                <li>Mark the replacement beneficiary as "Replacement" with status "Active"</li>
+                <li>Create a permanent record of this replacement</li>
+                <li>No data will be deleted (audit requirement)</li>
+              </ul>
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={() => setOpenReplaceDialog(false)} 
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleReplaceBeneficiary}
+            variant="contained" 
+            color="warning"
+            disabled={!replacementForm.replacement_beneficiary_id || !replacementForm.reason.trim() || replacementLoading}
+            startIcon={<SwapHorizIcon />}
+          >
+            {replacementLoading ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Processing...
+              </>
+            ) : (
+              'Confirm Replacement'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* DETAIL VIEW DIALOG */}
       {selectedBeneficiary && (
         <BeneficiaryDetailView 
@@ -2305,8 +2736,16 @@ const Beneficiaries = () => {
             setSelectedBeneficiary(null);
           }}
           onEditClick={handleEditClick}
+          onReplaceClick={() => handleOpenReplaceDialog(selectedBeneficiary)}
         />
       )}
+
+      {/* REPLACEMENTS HISTORY DIALOG */}
+      <ReplacementsHistory 
+        replacements={replacements}
+        open={openHistoryDialog}
+        onClose={() => setOpenHistoryDialog(false)}
+      />
 
       {/* MENU */}
       <Menu
@@ -2318,6 +2757,15 @@ const Beneficiaries = () => {
         <MenuItem onClick={handleEditClick}>
           Edit
         </MenuItem>
+        {selectedBeneficiary?.beneficiary_status === 'Current' && selectedBeneficiary?.status === 'Active' && (
+          <MenuItem onClick={() => {
+            handleOpenReplaceDialog(selectedBeneficiary);
+            handleMenuClose();
+          }}>
+            <SwapHorizIcon fontSize="small" sx={{ mr: 1 }} />
+            Replace
+          </MenuItem>
+        )}
         <MenuItem onClick={() => handleCardClick(selectedBeneficiary)}>
           View Details
         </MenuItem>
