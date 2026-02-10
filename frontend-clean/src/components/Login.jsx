@@ -46,21 +46,10 @@ const Login = ({ onLogin }) => {  // Add onLogin as a prop here
         width: "100%",
         maxWidth: 1200
       }}>
-        <Typography variant="h4" sx={{ fontWeight: "bold", color: "black", mb:1 }}>
-          JumpStart Your Career (NPO)
-        </Typography>
-        <Avatar alt="Company Logo" src={companyLogo} sx={{ width: 120, height: 80}} />
+    
       </Box>
 
-      <Divider sx={{ 
-        borderBottomWidth: 2, 
-        bgcolor: "black", 
-        mb: 2, 
-        width: "100%",
-        maxWidth: 1200 
-      }} />
 
-      
             {/* Title */}
             <Typography variant="h5" sx={{ textAlign: "center", fontWeight: "bold", color: "primary", mb: 3 }}>
               Projects and Beneficiary Management System

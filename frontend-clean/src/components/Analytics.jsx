@@ -340,21 +340,20 @@ const Analytics = () => {
   return (
     <Box sx={{ p: 3, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={handleBackToDashboard}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Box>
-            <Typography variant="h4" fontWeight="bold" color="primary">
-              Project Analytics Dashboard
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Insights based on Project Types, Status, and Funders
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+      {/* Report content for PDF export */}
+      <div ref={reportRef} style={{ backgroundColor: 'white', padding: '20px' }}>
+        {/* PDF Header */}
+        <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #1976d2', pb: 2 }}>
+          <Typography variant="h4" color="primary" fontWeight="bold">
+            JumpStart Your Career (NPO)
+          </Typography>
+          <Typography variant="h6" color="text.secondary">
+            Project Analytics Report
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Generated on: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+          </Typography>
+           <Box sx={{ display: 'flex', gap: 2,  alignContent:"right", mb:4 , justifyContent:"flex-end"}}>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
@@ -373,28 +372,9 @@ const Analytics = () => {
             </Button>
           </Tooltip>
         </Box>
-      </Box>
 
-      {error && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Report content for PDF export */}
-      <div ref={reportRef} style={{ backgroundColor: 'white', padding: '20px' }}>
-        {/* PDF Header */}
-        <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #1976d2', pb: 2 }}>
-          <Typography variant="h4" color="primary" fontWeight="bold">
-            JumpStart Your Career (NPO)
-          </Typography>
-          <Typography variant="h6" color="text.secondary">
-            Project Analytics Report
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Generated on: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-          </Typography>
         </Box>
+
 
 
         {/* Chart Selection */}

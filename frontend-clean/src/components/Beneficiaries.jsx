@@ -1782,9 +1782,8 @@ const Beneficiaries = () => {
                   >
                     <MenuItem value="Active">Active</MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
-                    <MenuItem value="Graduated">Graduated</MenuItem>
                     <MenuItem value="Dropped">Dropped</MenuItem>
-                    <MenuItem value="Transferred">Transferred</MenuItem>
+                    <MenuItem value="Replaced">Replaced</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>

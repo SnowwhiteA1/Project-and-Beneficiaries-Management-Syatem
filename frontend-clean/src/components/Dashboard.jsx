@@ -265,10 +265,17 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h4" fontWeight="bold">JumpStart Your Career (NPO)</Typography>
-        <Avatar src={companyLogo} sx={{ width: 100, height: 80 }} variant="square" />
-      </Box>
+             <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #1976d2', pb: 2 }}>
+               <Typography variant="h4" color="primary" fontWeight="bold">
+                 JumpStart Your Career (NPO)
+               </Typography>
+               <Typography variant="h6" color="text.secondary">
+                 Projects Over View 
+               </Typography>
+               <Typography variant="body2" color="text.secondary">
+                 Generated on: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+               </Typography>
+             </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
