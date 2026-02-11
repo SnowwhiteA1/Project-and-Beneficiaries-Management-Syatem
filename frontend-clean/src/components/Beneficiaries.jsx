@@ -76,7 +76,7 @@ import axios from "axios";
 
 const API_BASE = "http://localhost:5050";
 
-// Helper functions that can be used anywhere
+// Helper functions
 const formatDate = (dateString) => {
   if (!dateString) return "Not specified";
   try {
@@ -102,7 +102,7 @@ const hasValue = (value) => {
   return value !== null && value !== undefined && value !== "";
 };
 
-// Memoize the TabPanel component to prevent unnecessary re-renders
+// Memoize the TabPanel component
 const TabPanel = React.memo(({ children, value, index, ...other }) => {
   return (
     <div
@@ -121,7 +121,7 @@ const TabPanel = React.memo(({ children, value, index, ...other }) => {
   );
 });
 
-// Memoize the BeneficiaryDetailView component
+// Fixed BeneficiaryDetailView
 const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditClick, onReplaceClick }) => {
   if (!beneficiary) return null;
 
@@ -131,7 +131,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
       onClose={onClose} 
       fullWidth 
       maxWidth="md"
-      maxHeight="90vh"
+      PaperProps={{ sx: { maxHeight: '90vh' } }}
     >
       <DialogTitle sx={{ 
         borderBottom: 1, 
@@ -143,7 +143,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
       }}>
         <Box>
           <Typography variant="h5" component="div" fontWeight="bold">
-            {beneficiary.first_name} {beneficiary.last_name}
+            {beneficiary.learner_names} {beneficiary.learner_surname}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5 }}>
             <Typography variant="body2" color="text.secondary">
@@ -225,7 +225,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
               <Grid item xs={12} sm={6}>
                 <ListItem disablePadding>
                   <ListItemIcon sx={{ minWidth: 36 }}>
-                    <Typography sx={{ fontSize: '14px', minWidth: 36 }}>Age</Typography>
+                    <Box sx={{ fontSize: '14px', minWidth: 36 }}>Age</Box>
                   </ListItemIcon>
                   <ListItemText 
                     primary="Age" 
@@ -455,6 +455,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
                                beneficiary.status === 'Completed' ? 'primary' : 'default'}
                       />
                     }
+                    secondaryTypographyProps={{ component: "div" }}
                   />
                 </ListItem>
               </Grid>
@@ -615,6 +616,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
                             color={beneficiary.seta_funded ? "success" : "default"}
                           />
                         }
+                        secondaryTypographyProps={{ component: "div" }}
                       />
                     </ListItem>
                   </Grid>
@@ -646,7 +648,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
                 <Typography variant="subtitle1" fontWeight="bold">
                   Notes
                 </Typography>
-              </Box>
+            </Box>
             </AccordionSummary>
             <AccordionDetails>
               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -700,7 +702,7 @@ const BeneficiaryDetailView = React.memo(({ beneficiary, open, onClose, onEditCl
   );
 });
 
-// Replacements History Component
+// Fixed ReplacementsHistory component
 const ReplacementsHistory = React.memo(({ replacements, open, onClose }) => {
   return (
     <Dialog 
@@ -708,6 +710,7 @@ const ReplacementsHistory = React.memo(({ replacements, open, onClose }) => {
       onClose={onClose} 
       fullWidth 
       maxWidth="lg"
+      PaperProps={{ sx: { maxHeight: '80vh' } }}
     >
       <DialogTitle sx={{ 
         borderBottom: 1, 
@@ -962,8 +965,12 @@ const Beneficiaries = () => {
 
   const [formData, setFormData] = useState(initialFormData);
 
-  // Memoize formData to prevent unnecessary re-renders
   const memoizedFormData = useMemo(() => formData, [formData]);
+
+  // Add debug logging
+  useEffect(() => {
+    console.log("Current beneficiaries data:", beneficiaries);
+  }, [beneficiaries]);
 
   useEffect(() => {
     fetchProjectAndBeneficiaries();
@@ -973,19 +980,16 @@ const Beneficiaries = () => {
     try {
       setLoading(true);
       
-      // Fetch project details
       const projectRes = await axios.get(`${API_BASE}/api/projects/${projectId}`);
       if (projectRes.data) {
         setProjectTitle(projectRes.data.name || `Project #${projectId}`);
       }
       
-      // Fetch beneficiaries for this project
       const beneficiariesRes = await axios.get(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`
       );
       setBeneficiaries(beneficiariesRes.data);
       
-      // Fetch replacements history
       await fetchReplacementsHistory();
       
     } catch (err) {
@@ -999,9 +1003,11 @@ const Beneficiaries = () => {
   const fetchReplacementsHistory = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/projects/${projectId}/replacements`);
+      console.log("Replacements data:", res.data);
       setReplacements(res.data);
     } catch (err) {
-      console.error("Error fetching replacements:", err);
+      console.error("Error fetching replacements:", err.response?.data || err.message);
+      showSnackbar("Failed to load replacements history", "error");
     }
   };
 
@@ -1009,7 +1015,6 @@ const Beneficiaries = () => {
     setSnackbar({ open: true, message, severity });
   }, []);
 
-  // NEW FUNCTION: Handle opening replacement dialog
   const handleOpenReplaceDialog = useCallback(async (beneficiary) => {
     try {
       setSelectedBeneficiary(beneficiary);
@@ -1019,7 +1024,7 @@ const Beneficiaries = () => {
         reason: ""
       });
       
-      // Fetch available beneficiaries for replacement (Active beneficiaries who are not already replaced)
+      // Fetch available beneficiaries for replacement
       const available = beneficiaries.filter(b => 
         b.id !== beneficiary.id && 
         b.status === 'Active' && 
@@ -1034,7 +1039,7 @@ const Beneficiaries = () => {
     }
   }, [beneficiaries, showSnackbar]);
 
-  // NEW FUNCTION: Handle replacement submission
+  // FIXED: Improved error handling for replacement
   const handleReplaceBeneficiary = async () => {
     try {
       if (!replacementForm.replacement_beneficiary_id) {
@@ -1047,11 +1052,27 @@ const Beneficiaries = () => {
         return;
       }
 
+      // Check if trying to replace with self
+      if (replacementForm.replaced_beneficiary_id === replacementForm.replacement_beneficiary_id) {
+        showSnackbar("Cannot replace a beneficiary with themselves", "error");
+        return;
+      }
+
       setReplacementLoading(true);
+
+      console.log("Replacement data:", {
+        replaced_beneficiary_id: parseInt(replacementForm.replaced_beneficiary_id),
+        replacement_beneficiary_id: parseInt(replacementForm.replacement_beneficiary_id),
+        reason: replacementForm.reason.trim()
+      });
 
       const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/beneficiaries/replace`,
-        replacementForm,
+        {
+          replaced_beneficiary_id: parseInt(replacementForm.replaced_beneficiary_id),
+          replacement_beneficiary_id: parseInt(replacementForm.replacement_beneficiary_id),
+          reason: replacementForm.reason.trim()
+        },
         {
           headers: {
             'Content-Type': 'application/json'
@@ -1059,6 +1080,7 @@ const Beneficiaries = () => {
         }
       );
 
+      console.log("Replacement successful:", response.data);
       showSnackbar("Beneficiary replaced successfully!");
       
       // Reset forms and close dialogs
@@ -1074,14 +1096,23 @@ const Beneficiaries = () => {
       await fetchProjectAndBeneficiaries();
       
     } catch (err) {
-      console.error("Error replacing beneficiary:", err);
+      console.error("Error replacing beneficiary:", err.response?.data || err);
+      
       let errorMessage = "Failed to replace beneficiary. ";
       if (err.response?.data?.error) {
         errorMessage += err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage += err.response.data.message;
       } else if (err.response?.status === 400) {
-        errorMessage = "Invalid replacement request";
+        errorMessage = "Invalid replacement request. Please check the selected beneficiaries.";
       } else if (err.response?.status === 404) {
-        errorMessage = "Beneficiary not found";
+        errorMessage = "Beneficiary not found. Please refresh the page.";
+      } else if (err.response?.status === 409) {
+        errorMessage = "This beneficiary has already been replaced.";
+      } else if (err.response?.status === 500) {
+        errorMessage = "Server error. Please check backend logs.";
+      } else if (!err.response) {
+        errorMessage = "Network error. Please check your connection.";
       }
       
       showSnackbar(errorMessage, "error");
@@ -1090,7 +1121,6 @@ const Beneficiaries = () => {
     }
   };
 
-  // NEW FUNCTION: Handle replacements history dialog
   const handleOpenHistoryDialog = async () => {
     try {
       await fetchReplacementsHistory();
@@ -1101,18 +1131,15 @@ const Beneficiaries = () => {
     }
   };
 
-  // Fix the handleInputChange to prevent re-renders on every keystroke
   const handleInputChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     
-    // Use functional update to ensure we have the latest state
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
   }, []);
 
-  // Fix for Select components
   const handleSelectChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -1121,7 +1148,6 @@ const Beneficiaries = () => {
     }));
   }, []);
 
-  // NEW FUNCTION: Handle replacement form changes
   const handleReplacementFormChange = useCallback((e) => {
     const { name, value } = e.target;
     setReplacementForm(prev => ({
@@ -1139,7 +1165,6 @@ const Beneficiaries = () => {
 
   const handleAddBeneficiary = async () => {
     try {
-      // Validate required fields
       if (!formData.first_name.trim()) {
         showSnackbar("First name is required", "error");
         return;
@@ -1153,14 +1178,13 @@ const Beneficiaries = () => {
         return;
       }
 
-      // Map frontend field names to backend field names
+      // FIXED: Map to correct backend field names
       const dataToSend = {
-        // Required fields
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
+        // FIX: Use learner_names and learner_surname
+        learner_names: formData.first_name.trim(),
+        learner_surname: formData.last_name.trim(),
         id_number: formData.id_number.trim(),
         
-        // Personal details with defaults
         gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
         race: formData.race || "",
@@ -1168,19 +1192,16 @@ const Beneficiaries = () => {
         date_of_birth: formData.date_of_birth || null,
         home_language: formData.home_language || "English",
         
-        // Contact information
         mobile_phone: formData.mobile_phone || "",
         email: formData.email_address || "",
         parent_guardian_mobile: formData.parent_guardian_mobile || "",
         parent_guardian_email: formData.parent_guardian_email || "",
         
-        // Demographic info
         disability: Boolean(formData.disability),
         disability_type: formData.disability_type || "",
         youth: Boolean(formData.youth),
         non_rsa_citizen: Boolean(formData.non_rsa_citizen),
         
-        // Address info
         learner_province: formData.learner_province || "",
         learner_municipality: formData.learner_district_municipality || "",
         residential_area: formData.residential_area || "",
@@ -1193,15 +1214,14 @@ const Beneficiaries = () => {
         postal_code: formData.postal_code || "",
         learner_local_municipality: formData.learner_local_municipality || "",
         
-        // Programme info
         learning_programme_type: formData.type_of_learning_programme || "Training",
         programme_start_date: formData.programme_start_date || new Date().toISOString().split('T')[0],
         programme_completion_date: formData.programme_completion_date || null,
         certificate_issue_date: formData.certificate_issue_date || null,
         programme_outcome: formData.programme_outcome || "",
         status: formData.status || "Active",
+        beneficiary_status: "Current", // FIXED: Set initial status
         
-        // Qualification info
         ofo_code: formData.ofo_code || "",
         nqf_level: formData.nqf_level || "",
         qualification_id: formData.qualification_id || "",
@@ -1209,12 +1229,10 @@ const Beneficiaries = () => {
         learnership_id: formData.learnership_id || "",
         unit_standard_id: formData.unit_standard_id || "",
         
-        // Employer info
         employer_name: formData.employer_name || "",
         employer_sdl_number: formData.employer_sdl_number || "",
         employer_contact_details: formData.employer_contact_details || "",
         
-        // Training provider info
         training_provider_name: formData.training_provider_name || "",
         training_provider_sdl_number: formData.training_provider_sdl_number || "",
         training_provider_contact_details: formData.training_provider_contact_details || "",
@@ -1227,43 +1245,37 @@ const Beneficiaries = () => {
         training_provider_accreditation_start_date: formData.training_provider_accreditation_start_date || null,
         training_provider_province_code: formData.training_provider_province_code || "",
         
-        // Financial info
         seta_funded: Boolean(formData.seta_industry_funded),
         amount_spent_per_learner: formData.amount_spent_per_learner ? parseFloat(formData.amount_spent_per_learner) : 0,
         
-        // Additional fields
         agreement_number: formData.agreement_moa_number || "",
         project_number: formData.project_number || "",
         activity_number: formData.activity_number || "",
         app_sub_programme: formData.app_sub_programme || "",
         
-        // School info
         last_school_emis: formData.last_school_emis || "",
         last_school_year: formData.last_school_year || "",
         
-        // Non-NQF fields
         non_nqf_subfield_id: formData.non_nqf_intervention_subfield || "",
         non_nqf_status_id: formData.non_nqf_intervention_status || "",
         non_nqf_credit: formData.non_nqf_intervention_credit || "",
         
-        // Employment info
         employment_status: formData.employment_status || "",
         current_employer: formData.current_employer || "",
         monthly_income: formData.monthly_income ? parseFloat(formData.monthly_income) : 0,
         skills: formData.skills || "",
         
-        // Validation fields
         valid_id_number_length: Boolean(formData.valid_id_number_length),
         valid_age_for_youth: Boolean(formData.valid_age_for_youth),
         correctly_reported_youth: Boolean(formData.correctly_reported_youth),
         correctly_reported_gender: Boolean(formData.correctly_reported_gender),
         correctly_reported_race: Boolean(formData.correctly_reported_race),
         
-        // Notes
         notes: formData.notes || "",
-        validation_errors: formData.validation_errors || "",
-        beneficiary_status: formData.beneficiary_status || "Current"
+        validation_errors: formData.validation_errors || ""
       };
+
+      console.log("Sending data to backend:", dataToSend); // Debug log
 
       const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/beneficiaries`,
@@ -1281,13 +1293,15 @@ const Beneficiaries = () => {
       fetchProjectAndBeneficiaries();
     } catch (err) {
       console.error("Error adding beneficiary:", err);
-      console.error("Error response:", err.response?.data);
+      console.error("Response data:", err.response?.data);
       
       let errorMessage = "Failed to add beneficiary. ";
       if (err.response?.data?.error) {
         errorMessage += err.response.data.error;
       } else if (err.response?.status === 409) {
         errorMessage = "ID number already exists in the system";
+      } else if (err.response?.status === 500) {
+        errorMessage = "Server error. Please check backend logs.";
       }
       
       showSnackbar(errorMessage, "error");
@@ -1298,15 +1312,15 @@ const Beneficiaries = () => {
     try {
       if (!selectedBeneficiary) return;
 
-      // Validate required fields
       if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.id_number.trim()) {
         showSnackbar("First name, last name, and ID number are required", "error");
         return;
       }
 
       const updateData = {
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
+        // FIXED: Use correct backend field names
+        learner_names: formData.first_name.trim(),
+        learner_surname: formData.last_name.trim(),
         id_number: formData.id_number.trim(),
         gender: formData.gender || "",
         age: formData.age ? parseInt(formData.age) : null,
@@ -1372,11 +1386,11 @@ const Beneficiaries = () => {
   const handleEditClick = useCallback(() => {
     if (!selectedBeneficiary) return;
 
-    // For editing, populate the form with existing data
     setFormData(prev => ({
       ...prev,
-      first_name: selectedBeneficiary.first_name || "",
-      last_name: selectedBeneficiary.last_name || "",
+      // FIXED: Map from backend fields to frontend fields
+      first_name: selectedBeneficiary.learner_names || "", // Changed from first_name
+      last_name: selectedBeneficiary.learner_surname || "", // Changed from last_name
       id_number: selectedBeneficiary.id_number || "",
       gender: selectedBeneficiary.gender || "",
       age: selectedBeneficiary.age || "",
@@ -1397,7 +1411,7 @@ const Beneficiaries = () => {
   }, [selectedBeneficiary]);
 
   const handleDeleteClick = () => {
-    if (window.confirm(`Are you sure you want to delete ${selectedBeneficiary.first_name} ${selectedBeneficiary.last_name}?`)) {
+    if (window.confirm(`Are you sure you want to delete ${selectedBeneficiary.learner_names} ${selectedBeneficiary.learner_surname}?`)) {
       handleDeleteBeneficiary();
     }
     handleMenuClose();
@@ -1411,7 +1425,6 @@ const Beneficiaries = () => {
     }
   };
 
-  // Handle card click to show beneficiary details
   const handleCardClick = useCallback((beneficiary) => {
     setSelectedBeneficiary(beneficiary);
     setOpenDetailDialog(true);
@@ -1569,12 +1582,12 @@ const Beneficiaries = () => {
                         fontWeight: 'bold'
                       }}
                     >
-                      {beneficiary.first_name?.charAt(0)?.toUpperCase() || "B"}
+                      {beneficiary.learner_names?.charAt(0)?.toUpperCase() || "B"}
                     </Avatar>
                     <Box sx={{ flexGrow: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <Typography variant="h6" fontWeight="bold" noWrap>
-                          {beneficiary.first_name} {beneficiary.last_name}
+                          {beneficiary.learner_names} {beneficiary.learner_surname}
                         </Typography>
                         {beneficiary.beneficiary_status === 'Replaced' && (
                           <Tooltip title="This beneficiary has been replaced">
@@ -1679,13 +1692,13 @@ const Beneficiaries = () => {
         </Grid>
       )}
 
-      {/* ADD/EDIT DIALOG WITH TABS */}
+      {/* ADD/EDIT DIALOG WITH TABS - FULL VERSION */}
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
         fullWidth 
         maxWidth="lg"
-        scroll="paper"
+        PaperProps={{ sx: { maxHeight: '90vh' } }}
       >
         <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           <Box>
@@ -1708,7 +1721,7 @@ const Beneficiaries = () => {
           </Tabs>
         </Box>
         
-        <DialogContent dividers sx={{ p: 0 }}>
+        <DialogContent dividers sx={{ p: 0, overflowY: 'auto' }}>
           {/* TAB 1: Personal Information */}
           <TabPanel value={activeTab} index={0}>
             <Grid container spacing={2}>
@@ -2619,6 +2632,7 @@ const Beneficiaries = () => {
         onClose={() => setOpenReplaceDialog(false)} 
         fullWidth 
         maxWidth="sm"
+        PaperProps={{ sx: { maxHeight: '80vh' } }}
       >
         <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -2637,11 +2651,11 @@ const Beneficiaries = () => {
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: 'warning.main' }}>
-                  {selectedBeneficiary.first_name?.charAt(0)?.toUpperCase()}
+                  {selectedBeneficiary.learner_names?.charAt(0)?.toUpperCase()}
                 </Avatar>
                 <Box>
                   <Typography variant="body1" fontWeight="medium">
-                    {selectedBeneficiary.first_name} {selectedBeneficiary.last_name}
+                    {selectedBeneficiary.learner_names} {selectedBeneficiary.learner_surname}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     ID: {selectedBeneficiary.id_number}
@@ -2668,7 +2682,7 @@ const Beneficiaries = () => {
               </MenuItem>
               {availableReplacements.map((beneficiary) => (
                 <MenuItem key={beneficiary.id} value={beneficiary.id}>
-                  {beneficiary.first_name} {beneficiary.last_name} 
+                  {beneficiary.learner_names} {beneficiary.learner_surname} 
                   {beneficiary.id_number && ` (ID: ${beneficiary.id_number})`}
                 </MenuItem>
               ))}
@@ -2687,16 +2701,25 @@ const Beneficiaries = () => {
             required
           />
           
+          {/* FIXED: Using Box instead of Typography to avoid <ul> inside <p> */}
           <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-            <Typography variant="body2" color="info.dark">
+            <Typography variant="body2" component="div" color="info.dark">
               <strong>Note:</strong> This action will:
-              <ul style={{ marginTop: 8, marginBottom: 8, paddingLeft: 20 }}>
-                <li>Mark the current beneficiary as "Replaced" with status "Inactive"</li>
-                <li>Mark the replacement beneficiary as "Replacement" with status "Active"</li>
-                <li>Create a permanent record of this replacement</li>
-                <li>No data will be deleted (audit requirement)</li>
-              </ul>
             </Typography>
+            <Box component="ul" sx={{ mt: 1, mb: 1, pl: 3, color: 'info.dark' }}>
+              <Typography variant="body2" component="li">
+                Mark the current beneficiary as "Replaced" with status "Inactive"
+              </Typography>
+              <Typography variant="body2" component="li">
+                Mark the replacement beneficiary as "Replacement" with status "Active"
+              </Typography>
+              <Typography variant="body2" component="li">
+                Create a permanent record of this replacement
+              </Typography>
+              <Typography variant="body2" component="li">
+                No data will be deleted (audit requirement)
+              </Typography>
+            </Box>
           </Box>
         </DialogContent>
         

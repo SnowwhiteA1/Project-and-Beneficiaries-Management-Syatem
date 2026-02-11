@@ -1354,11 +1354,14 @@ def get_project_analytics():
         return jsonify({"error": str(e)}), 500
  # ================= REPLACEMENTS ROUTES =================
 
+# ================= REPLACEMENTS ROUTES =================
+
 @app.route("/api/projects/<int:project_id>/beneficiaries/replace", methods=["POST", "OPTIONS"])
 def replace_beneficiary(project_id):
     if request.method == "OPTIONS":
         return '', 200
 
+    conn = None
     try:
         data = request.json
         replaced_id = data.get("replaced_beneficiary_id")
@@ -1382,36 +1385,57 @@ def replace_beneficiary(project_id):
 
         # Check both beneficiaries exist and belong to the same project
         cur.execute("""
-            SELECT id FROM beneficiaries
+            SELECT id, learner_names, learner_surname, id_number, beneficiary_status, status 
+            FROM beneficiaries 
             WHERE id IN (%s, %s) AND project_id = %s;
         """, (replaced_id, replacement_id, project_id))
 
-        if cur.rowcount != 2:
+        beneficiaries = cur.fetchall()
+        if len(beneficiaries) != 2:
             conn.rollback()
             return jsonify({"error": "Invalid beneficiaries or project mismatch"}), 400
 
-        # Insert replacement record
+        # Check if beneficiary is already replaced
+        cur.execute("""
+            SELECT beneficiary_status, status FROM beneficiaries WHERE id = %s;
+        """, (replaced_id,))
+        replaced_beneficiary = cur.fetchone()
+        
+        if replaced_beneficiary and replaced_beneficiary[0] == 'Replaced':
+            conn.rollback()
+            return jsonify({"error": "This beneficiary has already been replaced"}), 409
+
+        # Insert replacement record with CURRENT_DATE
+        # FIXED: Changed 'placements' to 'replacements'
         cur.execute("""
             INSERT INTO replacements (
                 project_id,
                 replaced_beneficiary_id,
                 replacement_beneficiary_id,
+                replacement_date,
                 reason
             )
-            VALUES (%s, %s, %s, %s);
+            VALUES (%s, %s, %s, CURRENT_DATE, %s)
+            RETURNING id;
         """, (project_id, replaced_id, replacement_id, reason))
+
+        replacement_record_id = cur.fetchone()[0]
 
         # Update old beneficiary
         cur.execute("""
             UPDATE beneficiaries
-            SET beneficiary_status = 'Replaced', status = 'Inactive'
+            SET beneficiary_status = 'Replaced', 
+                status = 'Inactive',
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %s;
         """, (replaced_id,))
 
         # Update new beneficiary
         cur.execute("""
             UPDATE beneficiaries
-            SET beneficiary_status = 'Replacement', status = 'Active'
+            SET beneficiary_status = 'Replacement', 
+                status = 'Active',
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %s;
         """, (replacement_id,))
 
@@ -1419,18 +1443,32 @@ def replace_beneficiary(project_id):
         cur.close()
         conn.close()
 
-        return jsonify({"message": "Beneficiary replaced successfully"}), 201
+        return jsonify({
+            "message": "Beneficiary replaced successfully",
+            "replacement_id": replacement_record_id
+        }), 201
 
-    except psycopg2.errors.UniqueViolation:
-        conn.rollback()
-        return jsonify({"error": "This beneficiary has already been replaced"}), 409
-
+    except psycopg2.errors.UniqueViolation as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"error": "This beneficiary has already been replaced or duplicate replacement attempted"}), 409
+    except psycopg2.Error as e:
+        if conn:
+            conn.rollback()
+        print("❌ Database error:", str(e))
+        return jsonify({"error": "Database error occurred"}), 500
     except Exception as e:
         if conn:
             conn.rollback()
-        print("❌ Replacement error:", e)
+        print("❌ Replacement error:", str(e))
+        import traceback
         print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 
 
 @app.route("/api/projects/<int:project_id>/replacements", methods=["GET", "OPTIONS"])
@@ -1438,47 +1476,80 @@ def get_project_replacements(project_id):
     if request.method == "OPTIONS":
         return '', 200
 
+    conn = None
     try:
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
 
         cur = conn.cursor()
+        
+        # First, verify the project exists
+        cur.execute("SELECT id FROM projects WHERE id = %s", (project_id,))
+        project = cur.fetchone()
+        
+        if not project:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Project not found"}), 404
+        
+        # FIXED: Changed 'placements p' to 'replacements p'
         cur.execute("""
             SELECT
-                r.id,
-                r.replacement_date,
-                r.reason,
-                b1.learner_names || ' ' || b1.learner_surname AS replaced_beneficiary,
-                b2.learner_names || ' ' || b2.learner_surname AS replacement_beneficiary
-            FROM replacements r
-            JOIN beneficiaries b1 ON r.replaced_beneficiary_id = b1.id
-            JOIN beneficiaries b2 ON r.replacement_beneficiary_id = b2.id
-            WHERE r.project_id = %s
-            ORDER BY r.replacement_date DESC;
+                p.id,
+                p.replacement_date,
+                p.reason,
+                p.created_at,
+                -- Replaced beneficiary info
+                b1.id as replaced_id,
+                b1.learner_names as replaced_first_name,
+                b1.learner_surname as replaced_last_name,
+                b1.id_number as replaced_id_number,
+                -- Replacement beneficiary info
+                b2.id as replacement_id,
+                b2.learner_names as replacement_first_name,
+                b2.learner_surname as replacement_last_name,
+                b2.id_number as replacement_id_number
+            FROM replacements p  -- FIXED: Changed 'placements' to 'replacements'
+            JOIN beneficiaries b1 ON p.replaced_beneficiary_id = b1.id
+            JOIN beneficiaries b2 ON p.replacement_beneficiary_id = b2.id
+            WHERE p.project_id = %s
+            ORDER BY p.replacement_date DESC, p.created_at DESC;
         """, (project_id,))
 
         rows = cur.fetchall()
-        cur.close()
-        conn.close()
-
+        
         results = []
         for row in rows:
             results.append({
-                "replacement_id": row[0],
-                "replacement_date": format_date(row[1]),
+                "id": row[0],
+                "replacement_date": row[1].strftime("%Y-%m-%d") if row[1] else None,
                 "reason": row[2],
-                "replaced_beneficiary": row[3],
-                "replacement_beneficiary": row[4]
+                "created_at": row[3].strftime("%Y-%m-%d %H:%M:%S") if row[3] else None,
+                "replaced_id": row[4],
+                "replaced_first_name": row[5],
+                "replaced_last_name": row[6],
+                "replaced_id_number": row[7],
+                "replacement_id": row[8],
+                "replacement_first_name": row[9],
+                "replacement_last_name": row[10],
+                "replacement_id_number": row[11]
             })
 
+        cur.close()
         return jsonify(results)
 
+    except psycopg2.Error as e:
+        print(f"❌ Database error in get_project_replacements: {str(e)}")
+        return jsonify({"error": "Database query failed", "details": str(e)}), 500
     except Exception as e:
-        print("❌ Fetch replacements error:", e)
-        return jsonify({"error": str(e)}), 500
-
-
+        print(f"❌ Unexpected error in get_project_replacements: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
 # ================= STATIC FILES FOR UPLOADS =================
 @app.route('/uploads/<filename>')
 def serve_uploaded_file(filename):
