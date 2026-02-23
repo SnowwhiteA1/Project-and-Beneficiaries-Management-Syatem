@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask import send_from_directory
 import psycopg2
+import psycopg2.extras
 import traceback
 from datetime import datetime
 import os
@@ -47,6 +48,8 @@ def get_db_connection():
 def format_date(date_value):
     """Format date to string or return None"""
     if date_value:
+        if isinstance(date_value, str):
+            return date_value
         return date_value.strftime("%Y-%m-%d")
     return None
 
@@ -68,7 +71,7 @@ def get_projects():
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
             SELECT id, name, project_type, description, funder, accreditor, project_image_url,
                    start_date, end_date, status, created_at
@@ -79,19 +82,11 @@ def get_projects():
         rows = cur.fetchall()
         projects = []
         for row in rows:
-            projects.append({
-                "id": row[0],
-                "name": row[1],
-                "project_type": row[2],
-                "description": row[3],
-                "funder": row[4],
-                "accreditor": row[5],
-                "project_image_url": row[6],
-                "start_date": format_date(row[7]),
-                "end_date": format_date(row[8]),
-                "status": row[9],
-                "created_at": row[10].strftime("%Y-%m-%d %H:%M:%S") if row[10] else None
-            })
+            project = dict(row)
+            project['start_date'] = format_date(project.get('start_date'))
+            project['end_date'] = format_date(project.get('end_date'))
+            project['created_at'] = format_date(project.get('created_at'))
+            projects.append(project)
         
         cur.close()
         conn.close()
@@ -112,7 +107,7 @@ def get_project(project_id):
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
             SELECT id, name, project_type, description, funder, accreditor, project_image_url,
                    start_date, end_date, status, created_at
@@ -127,19 +122,11 @@ def get_project(project_id):
         if not row:
             return jsonify({"error": "Project not found"}), 404
         
-        project = {
-            "id": row[0],
-            "name": row[1],
-            "project_type": row[2],
-            "description": row[3],
-            "funder": row[4],
-            "accreditor": row[5],
-            "project_image_url": row[6],
-            "start_date": format_date(row[7]),
-            "end_date": format_date(row[8]),
-            "status": row[9],
-            "created_at": row[10].strftime("%Y-%m-%d %H:%M:%S") if row[10] else None
-        }
+        project = dict(row)
+        project['start_date'] = format_date(project.get('start_date'))
+        project['end_date'] = format_date(project.get('end_date'))
+        project['created_at'] = format_date(project.get('created_at'))
+        
         return jsonify(project)
     
     except Exception as e:
@@ -169,14 +156,13 @@ def create_project():
                 file = request.files['project_image']
                 if file and file.filename != '' and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
-                    # Create unique filename to avoid collisions
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     filename = f"{timestamp}_{filename}"
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     file.save(filepath)
                     project_image_url = f"http://localhost:5050/uploads/{filename}"
         else:
-            # Handle JSON request (for backward compatibility)
+            # Handle JSON request
             data = request.json
             name = data.get('name')
             project_type = data.get('project_type')
@@ -205,12 +191,12 @@ def create_project():
         """, (
             name.strip(),
             project_type.strip(),
-            description.strip(),
-            funder.strip(),
-            accreditor.strip(),
+            description.strip() if description else None,
+            funder.strip() if funder else None,
+            accreditor.strip() if accreditor else None,
             project_image_url,
-            start_date,
-            end_date,
+            start_date if start_date else None,
+            end_date if end_date else None,
             status
         ))
         
@@ -245,11 +231,9 @@ def update_project(project_id):
             conn.close()
             return jsonify({"error": "Project not found"}), 404
         
-        # Check if request has form data
         if request.content_type and 'multipart/form-data' in request.content_type:
             data = request.form
-            # Handle file upload
-            project_image_url = existing_project[1]  # Keep existing image URL
+            project_image_url = existing_project[1]
             if 'project_image' in request.files:
                 file = request.files['project_image']
                 if file and file.filename != '' and allowed_file(file.filename):
@@ -263,11 +247,9 @@ def update_project(project_id):
             data = request.json
             project_image_url = data.get('project_image_url', existing_project[1])
         
-        # Build update query
         update_fields = []
         values = []
         
-        # List of allowed fields
         allowed_fields = {
             'name': data.get('name'),
             'project_type': data.get('project_type'),
@@ -283,7 +265,10 @@ def update_project(project_id):
         for field, value in allowed_fields.items():
             if value is not None:
                 update_fields.append(f"{field} = %s")
-                values.append(value.strip() if isinstance(value, str) else value)
+                if isinstance(value, str):
+                    values.append(value.strip() if value.strip() else None)
+                else:
+                    values.append(value)
         
         if not update_fields:
             cur.close()
@@ -343,35 +328,9 @@ def get_project_beneficiaries(project_id):
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT id, learner_names, learner_surname, learner_initials, id_number, 
-                   date_of_birth, gender, race, youth, disability, disability_type,
-                   non_rsa_citizen, home_language, mobile_phone, email_address,
-                   type_of_learning_programme, programme_start_date, programme_completion_date,
-                   certificate_issue_date, ofo_code, nqf_level, programme_description,
-                   qualification_id, employer_name, employer_sdl_number, employer_contact_details,
-                   training_provider_name, training_provider_sdl_number, training_provider_contact_details,
-                   training_provider_type, training_provider_province, training_provider_code,
-                   training_provider_etqa_id, learner_province, learner_district_municipality,
-                   learner_local_municipality, residential_area, area_type, stats_area_code,
-                   physical_address_line1, physical_address_line2, physical_address_code,
-                   postal_address_line1, postal_address_line2, postal_code, seta_industry_funded,
-                   amount_spent_per_learner, agreement_moa_number, black_designated_groups,
-                   black_females, black_males, coloured_females, coloured_males, indian_females,
-                   indian_males, white_females, white_males, disabled_females, disabled_males,
-                   youth_females, youth_males, non_rsa_citizen_females, non_rsa_citizen_males,
-                   project_number, activity_number, app_sub_programme, parent_guardian_mobile,
-                   parent_guardian_email, non_nqf_intervention_subfield, non_nqf_intervention_status,
-                   non_nqf_intervention_credit, unit_standard_id, training_provider_postal_address,
-                   training_provider_accreditation_start_date, training_provider_province_code,
-                   training_provider_physical_address, learnership_id, last_school_emis,
-                   last_school_year, valid_id_number_length, valid_age_for_youth,
-                   correctly_reported_youth, correctly_reported_gender, correctly_reported_race,
-                   skills, employment_status, current_employer, monthly_income, programme_outcome,
-                   status, age, beneficiary_status, id_document_url, qualification_document_url,
-                   notes, validation_errors, created_at, updated_at
-            FROM beneficiaries
+            SELECT * FROM beneficiaries
             WHERE project_id = %s
             ORDER BY created_at DESC;
         """, (project_id,))
@@ -379,106 +338,15 @@ def get_project_beneficiaries(project_id):
         rows = cur.fetchall()
         beneficiaries = []
         for row in rows:
-            beneficiaries.append({
-                "id": row[0],
-                "first_name": row[1],  # learner_names
-                "last_name": row[2],   # learner_surname
-                "initials": row[3],    # learner_initials
-                "id_number": row[4],
-                "date_of_birth": format_date(row[5]),
-                "gender": row[6],
-                "race": row[7],
-                "youth": format_boolean(row[8]),
-                "disability": format_boolean(row[9]),
-                "disability_type": row[10],
-                "non_rsa_citizen": format_boolean(row[11]),
-                "home_language": row[12],
-                "mobile_phone": row[13],
-                "email": row[14],  # email_address
-                "learning_programme_type": row[15],  # type_of_learning_programme
-                "programme_start_date": format_date(row[16]),
-                "programme_completion_date": format_date(row[17]),
-                "certificate_issue_date": format_date(row[18]),
-                "ofo_code": row[19],
-                "nqf_level": row[20],
-                "programme_description": row[21],
-                "qualification_id": row[22],
-                "employer_name": row[23],
-                "employer_sdl_number": row[24],
-                "employer_contact_details": row[25],
-                "training_provider_name": row[26],
-                "training_provider_sdl_number": row[27],
-                "training_provider_contact_details": row[28],
-                "training_provider_type": row[29],
-                "training_provider_province": row[30],
-                "training_provider_code": row[31],
-                "training_provider_etqa_id": row[32],
-                "learner_province": row[33],
-                "learner_district_municipality": row[34],  # learner_municipality
-                "learner_local_municipality": row[35],
-                "residential_area": row[36],
-                "area_type": row[37],
-                "stats_area_code": row[38],
-                "physical_address_line1": row[39],
-                "physical_address_line2": row[40],
-                "physical_address_code": row[41],
-                "postal_address_line1": row[42],
-                "postal_address_line2": row[43],
-                "postal_code": row[44],
-                "seta_industry_funded": format_boolean(row[45]),
-                "amount_spent_per_learner": float(row[46]) if row[46] else None,
-                "agreement_moa_number": row[47],
-                "black_designated_groups": row[48],
-                "black_females": row[49],
-                "black_males": row[50],
-                "coloured_females": row[51],
-                "coloured_males": row[52],
-                "indian_females": row[53],
-                "indian_males": row[54],
-                "white_females": row[55],
-                "white_males": row[56],
-                "disabled_females": row[57],
-                "disabled_males": row[58],
-                "youth_females": row[59],
-                "youth_males": row[60],
-                "non_rsa_citizen_females": row[61],
-                "non_rsa_citizen_males": row[62],
-                "project_number": row[63],
-                "activity_number": row[64],
-                "app_sub_programme": row[65],
-                "parent_guardian_mobile": row[66],
-                "parent_guardian_email": row[67],
-                "non_nqf_intervention_subfield": row[68],
-                "non_nqf_intervention_status": row[69],
-                "non_nqf_intervention_credit": row[70],
-                "unit_standard_id": row[71],
-                "training_provider_postal_address": row[72],
-                "training_provider_accreditation_start_date": format_date(row[73]),
-                "training_provider_province_code": row[74],
-                "training_provider_physical_address": row[75],
-                "learnership_id": row[76],
-                "last_school_emis": row[77],
-                "last_school_year": row[78],
-                "valid_id_number_length": format_boolean(row[79]),
-                "valid_age_for_youth": format_boolean(row[80]),
-                "correctly_reported_youth": format_boolean(row[81]),
-                "correctly_reported_gender": format_boolean(row[82]),
-                "correctly_reported_race": format_boolean(row[83]),
-                "skills": row[84],
-                "employment_status": row[85],
-                "current_employer": row[86],
-                "monthly_income": float(row[87]) if row[87] else None,
-                "programme_outcome": row[88],
-                "status": row[89],  # Main status field
-                "age": row[90],  # New age field
-                "beneficiary_status": row[91],  # New beneficiary_status field
-                "id_document_url": row[92],
-                "qualification_document_url": row[93],
-                "notes": row[94],
-                "validation_errors": row[95],
-                "created_at": row[96].strftime("%Y-%m-%d %H:%M:%S") if row[96] else None,
-                "updated_at": row[97].strftime("%Y-%m-%d %H:%M:%S") if row[97] else None
-            })
+            beneficiary = dict(row)
+            # Format dates
+            date_fields = ['date_of_birth', 'programme_start_date', 'programme_completion_date', 
+                          'certificate_issue_date', 'training_provider_accreditation_start_date',
+                          'created_at', 'updated_at']
+            for field in date_fields:
+                if beneficiary.get(field):
+                    beneficiary[field] = format_date(beneficiary[field])
+            beneficiaries.append(beneficiary)
         
         cur.close()
         conn.close()
@@ -499,13 +367,9 @@ def get_all_beneficiaries():
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT b.id, b.learner_names, b.learner_surname, b.id_number, b.gender, 
-                   b.age, b.mobile_phone, b.email_address, b.residential_area, 
-                   b.learner_province, b.learner_district_municipality, b.disability, 
-                   b.youth, b.non_rsa_citizen, b.race, b.status, b.beneficiary_status,
-                   b.created_at, p.name as project_name
+            SELECT b.*, p.name as project_name
             FROM beneficiaries b
             LEFT JOIN projects p ON b.project_id = p.id
             ORDER BY b.created_at DESC;
@@ -514,27 +378,15 @@ def get_all_beneficiaries():
         rows = cur.fetchall()
         beneficiaries = []
         for row in rows:
-            beneficiaries.append({
-                "id": row[0],
-                "first_name": row[1],
-                "last_name": row[2],
-                "id_number": row[3],
-                "gender": row[4],
-                "age": row[5],
-                "mobile_phone": row[6],
-                "email": row[7],
-                "residential_area": row[8],
-                "learner_province": row[9],
-                "learner_municipality": row[10],
-                "disability": format_boolean(row[11]),
-                "youth": format_boolean(row[12]),
-                "non_rsa_citizen": format_boolean(row[13]),
-                "race": row[14],
-                "status": row[15],
-                "beneficiary_status": row[16],
-                "created_at": row[17].strftime("%Y-%m-%d %H:%M:%S") if row[17] else None,
-                "project_name": row[18]
-            })
+            beneficiary = dict(row)
+            # Format dates
+            date_fields = ['date_of_birth', 'programme_start_date', 'programme_completion_date', 
+                          'certificate_issue_date', 'training_provider_accreditation_start_date',
+                          'created_at', 'updated_at']
+            for field in date_fields:
+                if beneficiary.get(field):
+                    beneficiary[field] = format_date(beneficiary[field])
+            beneficiaries.append(beneficiary)
         
         cur.close()
         conn.close()
@@ -551,36 +403,46 @@ def create_beneficiary(project_id):
         return '', 200
     try:
         data = request.json
+        print(f"📥 Received beneficiary data: {data}")
         
-        # Map frontend field names to database column names
+        # Required fields validation
+        required_fields = ['learner_names', 'learner_surname', 'id_number']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                "error": f"Missing required fields: {', '.join(missing_fields)}"
+            }), 400
+        
+        # Map frontend fields to database columns
         beneficiary_data = {
             "project_id": project_id,
-            "learner_names": data.get('first_name', '').strip(),
-            "learner_surname": data.get('last_name', '').strip(),
+            "learner_names": data.get('learner_names', '').strip(),
+            "learner_surname": data.get('learner_surname', '').strip(),
             "learner_initials": data.get('initials', '').strip(),
             "id_number": data.get('id_number', '').strip(),
             "date_of_birth": data.get('date_of_birth'),
             "gender": data.get('gender', '').strip(),
             "race": data.get('race', '').strip(),
-            "youth": data.get('youth', False),
+            "youth": data.get('youth', True),
             "disability": data.get('disability', False),
             "disability_type": data.get('disability_type', '').strip(),
             "non_rsa_citizen": data.get('non_rsa_citizen', False),
-            "home_language": data.get('home_language', '').strip(),
+            "home_language": data.get('home_language', 'English').strip(),
             "mobile_phone": data.get('mobile_phone', '').strip(),
             "email_address": data.get('email', '').strip(),
             "learner_province": data.get('learner_province', '').strip(),
             "learner_district_municipality": data.get('learner_municipality', '').strip(),
             "learner_local_municipality": data.get('learner_local_municipality', '').strip(),
             "residential_area": data.get('residential_area', '').strip(),
-            "age": data.get('age'),  # New age field
-            "beneficiary_status": data.get('beneficiary_status', 'Current'),  # New field with default
-            "type_of_learning_programme": data.get('learning_programme_type', '').strip(),
+            "age": data.get('age'),
+            "beneficiary_status": data.get('beneficiary_status', 'Current'),
+            "type_of_learning_programme": data.get('learning_programme_type', 'Training').strip(),
             "programme_start_date": data.get('programme_start_date', datetime.now().date()),
             "programme_completion_date": data.get('programme_completion_date'),
             "certificate_issue_date": data.get('certificate_issue_date'),
             "ofo_code": data.get('ofo_code', '').strip(),
-            "nqf_level": data.get('nqf_level'),
+            "nqf_level": data.get('nqf_level', '').strip(),
             "programme_description": data.get('qualification_description', '').strip(),
             "qualification_id": data.get('qualification_id', '').strip(),
             "employer_name": data.get('employer_name', '').strip(),
@@ -595,6 +457,8 @@ def create_beneficiary(project_id):
             "training_provider_etqa_id": data.get('training_provider_etqa_id', '').strip(),
             "training_provider_postal_address": data.get('training_provider_postal_address', '').strip(),
             "training_provider_physical_address": data.get('training_provider_physical_address', '').strip(),
+            "training_provider_accreditation_start_date": data.get('training_provider_accreditation_start_date'),
+            "training_provider_province_code": data.get('training_provider_province_code', '').strip(),
             "seta_industry_funded": data.get('seta_funded', False),
             "amount_spent_per_learner": data.get('amount_spent_per_learner', 0),
             "learnership_id": data.get('learnership_id', '').strip(),
@@ -604,10 +468,12 @@ def create_beneficiary(project_id):
             "non_nqf_intervention_credit": data.get('non_nqf_credit', '').strip(),
             "unit_standard_id": data.get('unit_standard_id', '').strip(),
             "last_school_emis": data.get('last_school_emis', '').strip(),
-            "last_school_year": data.get('last_school_year'),
+            "last_school_year": data.get('last_school_year', '').strip(),
             "area_type": data.get('area_type', '').strip(),
+            "stats_area_code": data.get('stats_area_code', '').strip(),
             "physical_address_line1": data.get('physical_address_line1', '').strip(),
             "physical_address_line2": data.get('physical_address_line2', '').strip(),
+            "physical_address_code": data.get('physical_address_code', '').strip(),
             "postal_address_line1": data.get('postal_address_line1', '').strip(),
             "postal_address_line2": data.get('postal_address_line2', '').strip(),
             "postal_code": data.get('postal_code', '').strip(),
@@ -616,56 +482,47 @@ def create_beneficiary(project_id):
             "skills": data.get('skills', '').strip(),
             "employment_status": data.get('employment_status', '').strip(),
             "current_employer": data.get('current_employer', '').strip(),
-            "monthly_income": data.get('monthly_income'),
+            "monthly_income": data.get('monthly_income', 0),
             "programme_outcome": data.get('programme_outcome', '').strip(),
             "notes": data.get('notes', '').strip(),
-            "status": data.get('status', 'Active')  # Main status field
+            "status": data.get('status', 'Active'),
+            "validation_errors": data.get('validation_errors', ''),
+            "valid_id_number_length": data.get('valid_id_number_length', True),
+            "valid_age_for_youth": data.get('valid_age_for_youth', True),
+            "correctly_reported_youth": data.get('correctly_reported_youth', True),
+            "correctly_reported_gender": data.get('correctly_reported_gender', True),
+            "correctly_reported_race": data.get('correctly_reported_race', True),
+            "black_designated_groups": data.get('black_designated_groups', 0),
+            "black_females": data.get('black_females', 0),
+            "black_males": data.get('black_males', 0),
+            "coloured_females": data.get('coloured_females', 0),
+            "coloured_males": data.get('coloured_males', 0),
+            "indian_females": data.get('indian_females', 0),
+            "indian_males": data.get('indian_males', 0),
+            "white_females": data.get('white_females', 0),
+            "white_males": data.get('white_males', 0),
+            "disabled_females": data.get('disabled_females', 0),
+            "disabled_males": data.get('disabled_males', 0),
+            "youth_females": data.get('youth_females', 0),
+            "youth_males": data.get('youth_males', 0),
+            "non_rsa_citizen_females": data.get('non_rsa_citizen_females', 0),
+            "non_rsa_citizen_males": data.get('non_rsa_citizen_males', 0),
+            "project_number": data.get('project_number', '').strip(),
+            "activity_number": data.get('activity_number', '').strip(),
+            "app_sub_programme": data.get('app_sub_programme', '').strip(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
         }
         
-        # Validate required fields
-        required_fields = ["learner_names", "learner_surname", "id_number"]
-        missing_fields = []
-        for field in required_fields:
-            if not beneficiary_data[field]:
-                missing_fields.append(field)
-        
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
-        
         # Validate age if provided
-        age = beneficiary_data["age"]
-        if age is not None:
+        if beneficiary_data["age"] is not None:
             try:
-                age = int(age)
+                age = int(beneficiary_data["age"])
                 if age < 0 or age > 120:
                     return jsonify({"error": "Age must be between 0 and 120"}), 400
                 beneficiary_data["age"] = age
             except (ValueError, TypeError):
                 return jsonify({"error": "Age must be a valid number"}), 400
-        
-        # Handle file uploads if present in form data
-        if request.content_type and 'multipart/form-data' in request.content_type:
-            # Handle ID document upload
-            if 'id_document' in request.files:
-                file = request.files['id_document']
-                if file and file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"id_doc_{timestamp}_{filename}"
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    beneficiary_data["id_document_url"] = f"http://localhost:5050/uploads/{filename}"
-            
-            # Handle qualification document upload
-            if 'qualification_document' in request.files:
-                file = request.files['qualification_document']
-                if file and file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"qual_doc_{timestamp}_{filename}"
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    beneficiary_data["qualification_document_url"] = f"http://localhost:5050/uploads/{filename}"
         
         conn = get_db_connection()
         if not conn:
@@ -673,13 +530,13 @@ def create_beneficiary(project_id):
         
         cur = conn.cursor()
         
-        # Build the INSERT query dynamically
+        # Build INSERT query
         columns = []
         values = []
         placeholders = []
         
         for key, value in beneficiary_data.items():
-            if value is not None:
+            if value is not None and value != '':
                 columns.append(key)
                 values.append(value)
                 placeholders.append("%s")
@@ -697,10 +554,10 @@ def create_beneficiary(project_id):
             cur.execute(query, values)
             beneficiary_id = cur.fetchone()[0]
             conn.commit()
-            
             cur.close()
             conn.close()
             
+            print(f"✅ Beneficiary created successfully with ID: {beneficiary_id}")
             return jsonify({
                 "id": beneficiary_id, 
                 "message": "Beneficiary created successfully"
@@ -711,7 +568,12 @@ def create_beneficiary(project_id):
             cur.close()
             conn.close()
             return jsonify({"error": "ID number already exists"}), 409
-            
+        except Exception as e:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            print(f"❌ Database error: {str(e)}")
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
     
     except Exception as e:
         print(f"❌ Error in create_beneficiary: {str(e)}")
@@ -728,35 +590,9 @@ def get_beneficiary(beneficiary_id):
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT id, learner_names, learner_surname, learner_initials, id_number, 
-                   date_of_birth, gender, race, youth, disability, disability_type,
-                   non_rsa_citizen, home_language, mobile_phone, email_address,
-                   type_of_learning_programme, programme_start_date, programme_completion_date,
-                   certificate_issue_date, ofo_code, nqf_level, programme_description,
-                   qualification_id, employer_name, employer_sdl_number, employer_contact_details,
-                   training_provider_name, training_provider_sdl_number, training_provider_contact_details,
-                   training_provider_type, training_provider_province, training_provider_code,
-                   training_provider_etqa_id, learner_province, learner_district_municipality,
-                   learner_local_municipality, residential_area, area_type, stats_area_code,
-                   physical_address_line1, physical_address_line2, physical_address_code,
-                   postal_address_line1, postal_address_line2, postal_code, seta_industry_funded,
-                   amount_spent_per_learner, agreement_moa_number, black_designated_groups,
-                   black_females, black_males, coloured_females, coloured_males, indian_females,
-                   indian_males, white_females, white_males, disabled_females, disabled_males,
-                   youth_females, youth_males, non_rsa_citizen_females, non_rsa_citizen_males,
-                   project_number, activity_number, app_sub_programme, parent_guardian_mobile,
-                   parent_guardian_email, non_nqf_intervention_subfield, non_nqf_intervention_status,
-                   non_nqf_intervention_credit, unit_standard_id, training_provider_postal_address,
-                   training_provider_accreditation_start_date, training_provider_province_code,
-                   training_provider_physical_address, learnership_id, last_school_emis,
-                   last_school_year, valid_id_number_length, valid_age_for_youth,
-                   correctly_reported_youth, correctly_reported_gender, correctly_reported_race,
-                   skills, employment_status, current_employer, monthly_income, programme_outcome,
-                   status, age, beneficiary_status, id_document_url, qualification_document_url,
-                   notes, validation_errors, created_at, updated_at, project_id
-            FROM beneficiaries
+            SELECT * FROM beneficiaries
             WHERE id = %s;
         """, (beneficiary_id,))
         
@@ -767,107 +603,15 @@ def get_beneficiary(beneficiary_id):
         if not row:
             return jsonify({"error": "Beneficiary not found"}), 404
         
-        beneficiary = {
-            "id": row[0],
-            "first_name": row[1],
-            "last_name": row[2],
-            "initials": row[3],
-            "id_number": row[4],
-            "date_of_birth": format_date(row[5]),
-            "gender": row[6],
-            "race": row[7],
-            "youth": format_boolean(row[8]),
-            "disability": format_boolean(row[9]),
-            "disability_type": row[10],
-            "non_rsa_citizen": format_boolean(row[11]),
-            "home_language": row[12],
-            "mobile_phone": row[13],
-            "email": row[14],
-            "learning_programme_type": row[15],
-            "programme_start_date": format_date(row[16]),
-            "programme_completion_date": format_date(row[17]),
-            "certificate_issue_date": format_date(row[18]),
-            "ofo_code": row[19],
-            "nqf_level": row[20],
-            "programme_description": row[21],
-            "qualification_id": row[22],
-            "employer_name": row[23],
-            "employer_sdl_number": row[24],
-            "employer_contact_details": row[25],
-            "training_provider_name": row[26],
-            "training_provider_sdl_number": row[27],
-            "training_provider_contact_details": row[28],
-            "training_provider_type": row[29],
-            "training_provider_province": row[30],
-            "training_provider_code": row[31],
-            "training_provider_etqa_id": row[32],
-            "learner_province": row[33],
-            "learner_district_municipality": row[34],
-            "learner_local_municipality": row[35],
-            "residential_area": row[36],
-            "area_type": row[37],
-            "stats_area_code": row[38],
-            "physical_address_line1": row[39],
-            "physical_address_line2": row[40],
-            "physical_address_code": row[41],
-            "postal_address_line1": row[42],
-            "postal_address_line2": row[43],
-            "postal_code": row[44],
-            "seta_industry_funded": format_boolean(row[45]),
-            "amount_spent_per_learner": float(row[46]) if row[46] else None,
-            "agreement_moa_number": row[47],
-            "black_designated_groups": row[48],
-            "black_females": row[49],
-            "black_males": row[50],
-            "coloured_females": row[51],
-            "coloured_males": row[52],
-            "indian_females": row[53],
-            "indian_males": row[54],
-            "white_females": row[55],
-            "white_males": row[56],
-            "disabled_females": row[57],
-            "disabled_males": row[58],
-            "youth_females": row[59],
-            "youth_males": row[60],
-            "non_rsa_citizen_females": row[61],
-            "non_rsa_citizen_males": row[62],
-            "project_number": row[63],
-            "activity_number": row[64],
-            "app_sub_programme": row[65],
-            "parent_guardian_mobile": row[66],
-            "parent_guardian_email": row[67],
-            "non_nqf_intervention_subfield": row[68],
-            "non_nqf_intervention_status": row[69],
-            "non_nqf_intervention_credit": row[70],
-            "unit_standard_id": row[71],
-            "training_provider_postal_address": row[72],
-            "training_provider_accreditation_start_date": format_date(row[73]),
-            "training_provider_province_code": row[74],
-            "training_provider_physical_address": row[75],
-            "learnership_id": row[76],
-            "last_school_emis": row[77],
-            "last_school_year": row[78],
-            "valid_id_number_length": format_boolean(row[79]),
-            "valid_age_for_youth": format_boolean(row[80]),
-            "correctly_reported_youth": format_boolean(row[81]),
-            "correctly_reported_gender": format_boolean(row[82]),
-            "correctly_reported_race": format_boolean(row[83]),
-            "skills": row[84],
-            "employment_status": row[85],
-            "current_employer": row[86],
-            "monthly_income": float(row[87]) if row[87] else None,
-            "programme_outcome": row[88],
-            "status": row[89],
-            "age": row[90],  # New age field
-            "beneficiary_status": row[91],  # New beneficiary_status field
-            "id_document_url": row[92],
-            "qualification_document_url": row[93],
-            "notes": row[94],
-            "validation_errors": row[95],
-            "created_at": row[96].strftime("%Y-%m-%d %H:%M:%S") if row[96] else None,
-            "updated_at": row[97].strftime("%Y-%m-%d %H:%M:%S") if row[97] else None,
-            "project_id": row[98]
-        }
+        beneficiary = dict(row)
+        # Format dates
+        date_fields = ['date_of_birth', 'programme_start_date', 'programme_completion_date', 
+                      'certificate_issue_date', 'training_provider_accreditation_start_date',
+                      'created_at', 'updated_at']
+        for field in date_fields:
+            if beneficiary.get(field):
+                beneficiary[field] = format_date(beneficiary[field])
+        
         return jsonify(beneficiary)
     
     except Exception as e:
@@ -880,33 +624,7 @@ def update_beneficiary(beneficiary_id):
     if request.method == "OPTIONS":
         return '', 200
     try:
-        # Check if request has form data
-        if request.content_type and 'multipart/form-data' in request.content_type:
-            data = request.form
-            # Handle file uploads
-            file_data = {}
-            if 'id_document' in request.files:
-                file = request.files['id_document']
-                if file and file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"id_doc_{timestamp}_{filename}"
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    file_data["id_document_url"] = f"http://localhost:5050/uploads/{filename}"
-            
-            if 'qualification_document' in request.files:
-                file = request.files['qualification_document']
-                if file and file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"qual_doc_{timestamp}_{filename}"
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    file_data["qualification_document_url"] = f"http://localhost:5050/uploads/{filename}"
-        else:
-            data = request.json
-            file_data = {}
+        data = request.json
         
         conn = get_db_connection()
         if not conn:
@@ -921,16 +639,16 @@ def update_beneficiary(beneficiary_id):
             conn.close()
             return jsonify({"error": "Beneficiary not found"}), 404
         
-        # Map frontend field names to database column names
+        # Map fields to update
         update_data = {
-            "learner_names": data.get('first_name'),
-            "learner_surname": data.get('last_name'),
+            "learner_names": data.get('learner_names'),
+            "learner_surname": data.get('learner_surname'),
             "learner_initials": data.get('initials'),
             "id_number": data.get('id_number'),
             "date_of_birth": data.get('date_of_birth'),
             "gender": data.get('gender'),
-            "age": data.get('age'),  # New age field
-            "beneficiary_status": data.get('beneficiary_status'),  # New beneficiary_status field
+            "age": data.get('age'),
+            "beneficiary_status": data.get('beneficiary_status'),
             "race": data.get('race'),
             "youth": data.get('youth'),
             "disability": data.get('disability'),
@@ -974,6 +692,7 @@ def update_beneficiary(beneficiary_id):
             "last_school_year": data.get('last_school_year'),
             "physical_address_line1": data.get('physical_address_line1'),
             "physical_address_line2": data.get('physical_address_line2'),
+            "physical_address_code": data.get('physical_address_code'),
             "postal_address_line1": data.get('postal_address_line1'),
             "postal_address_line2": data.get('postal_address_line2'),
             "postal_code": data.get('postal_code'),
@@ -985,25 +704,12 @@ def update_beneficiary(beneficiary_id):
             "monthly_income": data.get('monthly_income'),
             "programme_outcome": data.get('programme_outcome'),
             "notes": data.get('notes'),
-            "status": data.get('status'),  # Main status field
+            "status": data.get('status'),
             "updated_at": datetime.now()
         }
         
-        # Add file data
-        update_data.update(file_data)
-        
-        # Validate age if provided
-        if update_data.get("age") is not None:
-            try:
-                age = int(update_data["age"])
-                if age < 0 or age > 120:
-                    return jsonify({"error": "Age must be between 0 and 120"}), 400
-                update_data["age"] = age
-            except (ValueError, TypeError):
-                return jsonify({"error": "Age must be a valid number"}), 400
-        
         # Filter out None values
-        update_data = {k: v for k, v in update_data.items() if v is not None}
+        update_data = {k: v for k, v in update_data.items() if v is not None and v != ''}
         
         if not update_data:
             cur.close()
@@ -1015,10 +721,6 @@ def update_beneficiary(beneficiary_id):
         values = []
         
         for field, value in update_data.items():
-            # Handle boolean conversion
-            if field in ['youth', 'disability', 'non_rsa_citizen', 'seta_industry_funded']:
-                if isinstance(value, str):
-                    value = value.lower() in ['true', 'yes', '1', 't']
             update_fields.append(f"{field} = %s")
             values.append(value)
         
@@ -1076,6 +778,175 @@ def delete_beneficiary(beneficiary_id):
         print(f"❌ Error in delete_beneficiary: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+# ================= REPLACEMENTS ROUTES =================
+
+@app.route("/api/projects/<int:project_id>/replacements", methods=["GET", "OPTIONS"])
+def get_project_replacements(project_id):
+    """Get all replacements for a project"""
+    if request.method == "OPTIONS":
+        return '', 200
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT 
+                r.id,
+                r.project_id,
+                r.replaced_beneficiary_id,
+                r.replacement_beneficiary_id,
+                r.replacement_date,
+                r.reason,
+                r.created_at,
+                b1.learner_names as replaced_first_name,
+                b1.learner_surname as replaced_last_name,
+                b1.id_number as replaced_id_number,
+                b2.learner_names as replacement_first_name,
+                b2.learner_surname as replacement_last_name,
+                b2.id_number as replacement_id_number
+            FROM replacements r
+            LEFT JOIN beneficiaries b1 ON r.replaced_beneficiary_id = b1.id
+            LEFT JOIN beneficiaries b2 ON r.replacement_beneficiary_id = b2.id
+            WHERE r.project_id = %s
+            ORDER BY r.replacement_date DESC, r.created_at DESC;
+        """, (project_id,))
+        
+        rows = cur.fetchall()
+        replacements = []
+        for row in rows:
+            replacement = dict(row)
+            replacement['replacement_date'] = format_date(replacement.get('replacement_date'))
+            replacement['created_at'] = format_date(replacement.get('created_at'))
+            replacements.append(replacement)
+        
+        cur.close()
+        conn.close()
+        return jsonify(replacements)
+    
+    except Exception as e:
+        print(f"❌ Error in get_project_replacements: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+
+# ================= REPLACEMENTS ROUTES =================
+
+# ... other routes like get_project_replacements ...
+
+# KEEP ONLY THIS ONE VERSION of replace_beneficiary
+@app.route("/api/projects/<int:project_id>/beneficiaries/replace", methods=["POST", "OPTIONS"])
+def replace_beneficiary(project_id):
+    """Replace a beneficiary with another"""
+    if request.method == "OPTIONS":
+        return '', 200
+    
+    conn = None
+    cur = None
+    
+    try:
+        data = request.json
+        print(f"📥 Received replacement request: {data}")
+        
+        replaced_id = data.get('replaced_beneficiary_id')
+        replacement_id = data.get('replacement_beneficiary_id')
+        reason = data.get('reason', '').strip()
+        
+        # Validate required fields
+        if not replaced_id or not replacement_id:
+            return jsonify({"error": "Missing required fields: replaced_beneficiary_id and replacement_beneficiary_id"}), 400
+        
+        # Check if replacing with self
+        if replaced_id == replacement_id:
+            return jsonify({"error": "Cannot replace a beneficiary with themselves"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        # IMPORTANT: Don't disable autocommit
+        cur = conn.cursor()
+        
+        # First, verify both beneficiaries exist and belong to the project
+        cur.execute("""
+            SELECT id, beneficiary_status, status 
+            FROM beneficiaries 
+            WHERE id IN (%s, %s) AND project_id = %s
+        """, (replaced_id, replacement_id, project_id))
+        
+        beneficiaries = cur.fetchall()
+        if len(beneficiaries) != 2:
+            return jsonify({"error": "One or both beneficiaries not found in this project"}), 404
+        
+        # Check if replaced beneficiary is already replaced
+        cur.execute("SELECT id FROM replacements WHERE replaced_beneficiary_id = %s", (replaced_id,))
+        if cur.fetchone():
+            return jsonify({"error": "This beneficiary has already been replaced"}), 409
+        
+        # Update replaced beneficiary
+        cur.execute("""
+            UPDATE beneficiaries 
+            SET beneficiary_status = 'Replaced', 
+                status = 'Replaced'
+            WHERE id = %s
+        """, (replaced_id,))
+        
+        # Update replacement beneficiary
+        cur.execute("""
+            UPDATE beneficiaries 
+            SET beneficiary_status = 'Replacement', 
+                status = 'Active'
+            WHERE id = %s
+        """, (replacement_id,))
+        
+        # Create replacement record
+        cur.execute("""
+            INSERT INTO replacements (project_id, replaced_beneficiary_id, replacement_beneficiary_id, reason, replacement_date, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """, (project_id, replaced_id, replacement_id, reason, datetime.now().date(), datetime.now()))
+        
+        replacement_record_id = cur.fetchone()[0]
+        
+        # Commit all changes
+        conn.commit()
+        
+        print(f"✅ Replacement successful with ID: {replacement_record_id}")
+        return jsonify({
+            "message": "Beneficiary replaced successfully",
+            "replacement_id": replacement_record_id
+        }), 200
+        
+    except psycopg2.Error as e:
+        # Handle database errors specifically
+        if conn:
+            conn.rollback()
+        error_msg = str(e)
+        print(f"❌ Database error during replacement: {error_msg}")
+        print(traceback.format_exc())
+        return jsonify({"error": f"Failed to replace beneficiary: {error_msg}"}), 500
+    
+    except Exception as e:
+        # Handle other errors
+        if conn:
+            conn.rollback()
+        print(f"❌ Error during replacement: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": f"Failed to replace beneficiary: {str(e)}"}), 500
+    
+    finally:
+        # Clean up resources
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+# ... rest of your routes ...
+
+
+
 # ================= BENEFICIARY STATISTICS =================
 
 @app.route("/api/beneficiaries/statistics", methods=["GET", "OPTIONS"])
@@ -1088,38 +959,38 @@ def get_beneficiary_statistics():
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
         # Get total beneficiaries
-        cur.execute("SELECT COUNT(*) FROM beneficiaries")
-        total_beneficiaries = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) as count FROM beneficiaries")
+        total_beneficiaries = cur.fetchone()['count']
         
         # Get beneficiaries by gender
         cur.execute("""
-            SELECT gender, COUNT(*) 
+            SELECT gender, COUNT(*) as count 
             FROM beneficiaries 
-            WHERE gender IS NOT NULL 
+            WHERE gender IS NOT NULL AND gender != ''
             GROUP BY gender
         """)
-        gender_stats = {row[0]: row[1] for row in cur.fetchall()}
+        gender_stats = {row['gender']: row['count'] for row in cur.fetchall()}
         
         # Get beneficiaries by race
         cur.execute("""
-            SELECT race, COUNT(*) 
+            SELECT race, COUNT(*) as count 
             FROM beneficiaries 
-            WHERE race IS NOT NULL 
+            WHERE race IS NOT NULL AND race != ''
             GROUP BY race
         """)
-        race_stats = {row[0]: row[1] for row in cur.fetchall()}
+        race_stats = {row['race']: row['count'] for row in cur.fetchall()}
         
         # Get beneficiaries by status
         cur.execute("""
-            SELECT beneficiary_status, COUNT(*) 
+            SELECT beneficiary_status, COUNT(*) as count 
             FROM beneficiaries 
-            WHERE beneficiary_status IS NOT NULL 
+            WHERE beneficiary_status IS NOT NULL AND beneficiary_status != ''
             GROUP BY beneficiary_status
         """)
-        status_stats = {row[0]: row[1] for row in cur.fetchall()}
+        status_stats = {row['beneficiary_status']: row['count'] for row in cur.fetchall()}
         
         # Get beneficiaries by age group
         cur.execute("""
@@ -1132,21 +1003,21 @@ def get_beneficiary_statistics():
                     WHEN age > 45 THEN 'Over 45'
                     ELSE 'Unknown'
                 END as age_group,
-                COUNT(*)
+                COUNT(*) as count
             FROM beneficiaries 
             WHERE age IS NOT NULL
-            GROUP BY 1
+            GROUP BY age_group
         """)
-        age_stats = {row[0]: row[1] for row in cur.fetchall()}
+        age_stats = {row['age_group']: row['count'] for row in cur.fetchall()}
         
         # Get beneficiaries by province
         cur.execute("""
-            SELECT learner_province, COUNT(*) 
+            SELECT learner_province, COUNT(*) as count 
             FROM beneficiaries 
-            WHERE learner_province IS NOT NULL 
+            WHERE learner_province IS NOT NULL AND learner_province != ''
             GROUP BY learner_province
         """)
-        province_stats = {row[0]: row[1] for row in cur.fetchall()}
+        province_stats = {row['learner_province']: row['count'] for row in cur.fetchall()}
         
         cur.close()
         conn.close()
@@ -1186,15 +1057,11 @@ def search_beneficiaries():
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
         # Build query dynamically
         query = """
-            SELECT b.id, b.learner_names, b.learner_surname, b.id_number, b.gender, 
-                   b.age, b.mobile_phone, b.email_address, b.residential_area, 
-                   b.learner_province, b.learner_district_municipality, b.disability, 
-                   b.youth, b.non_rsa_citizen, b.race, b.status, b.beneficiary_status,
-                   b.created_at, p.name as project_name
+            SELECT b.*, p.name as project_name
             FROM beneficiaries b
             LEFT JOIN projects p ON b.project_id = p.id
             WHERE 1=1
@@ -1242,27 +1109,15 @@ def search_beneficiaries():
         
         beneficiaries = []
         for row in rows:
-            beneficiaries.append({
-                "id": row[0],
-                "first_name": row[1],
-                "last_name": row[2],
-                "id_number": row[3],
-                "gender": row[4],
-                "age": row[5],
-                "mobile_phone": row[6],
-                "email": row[7],
-                "residential_area": row[8],
-                "learner_province": row[9],
-                "learner_municipality": row[10],
-                "disability": format_boolean(row[11]),
-                "youth": format_boolean(row[12]),
-                "non_rsa_citizen": format_boolean(row[13]),
-                "race": row[14],
-                "status": row[15],
-                "beneficiary_status": row[16],
-                "created_at": row[17].strftime("%Y-%m-%d %H:%M:%S") if row[17] else None,
-                "project_name": row[18]
-            })
+            beneficiary = dict(row)
+            # Format dates
+            date_fields = ['date_of_birth', 'programme_start_date', 'programme_completion_date', 
+                          'certificate_issue_date', 'training_provider_accreditation_start_date',
+                          'created_at', 'updated_at']
+            for field in date_fields:
+                if beneficiary.get(field):
+                    beneficiary[field] = format_date(beneficiary[field])
+            beneficiaries.append(beneficiary)
         
         cur.close()
         conn.close()
@@ -1292,7 +1147,7 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
     
-   # ================= ANALYTICS ENDPOINTS =================
+# ================= ANALYTICS ENDPOINTS =================
 
 @app.route("/api/analytics/projects", methods=["GET", "OPTIONS"])
 def get_project_analytics():
@@ -1305,23 +1160,23 @@ def get_project_analytics():
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
         
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
         # Get total projects
-        cur.execute("SELECT COUNT(*) FROM projects")
-        total_projects = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) as count FROM projects")
+        total_projects = cur.fetchone()['count']
         
         # Get project types
-        cur.execute("SELECT project_type, COUNT(*) FROM projects GROUP BY project_type")
-        type_data = {row[0]: row[1] for row in cur.fetchall()}
+        cur.execute("SELECT project_type, COUNT(*) as count FROM projects WHERE project_type IS NOT NULL GROUP BY project_type")
+        type_data = {row['project_type']: row['count'] for row in cur.fetchall()}
         
         # Get status
-        cur.execute("SELECT status, COUNT(*) FROM projects GROUP BY status")
-        status_data = {row[0]: row[1] for row in cur.fetchall()}
+        cur.execute("SELECT status, COUNT(*) as count FROM projects WHERE status IS NOT NULL GROUP BY status")
+        status_data = {row['status']: row['count'] for row in cur.fetchall()}
         
         # Get funders
-        cur.execute("SELECT COALESCE(funder, 'No Funder'), COUNT(*) FROM projects GROUP BY funder")
-        funder_data = {row[0]: row[1] for row in cur.fetchall()}
+        cur.execute("SELECT COALESCE(funder, 'No Funder') as funder, COUNT(*) as count FROM projects GROUP BY funder")
+        funder_data = {row['funder']: row['count'] for row in cur.fetchall()}
         
         cur.close()
         conn.close()
@@ -1352,204 +1207,7 @@ def get_project_analytics():
     except Exception as e:
         print(f"❌ Error in analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
- # ================= REPLACEMENTS ROUTES =================
 
-# ================= REPLACEMENTS ROUTES =================
-
-@app.route("/api/projects/<int:project_id>/beneficiaries/replace", methods=["POST", "OPTIONS"])
-def replace_beneficiary(project_id):
-    if request.method == "OPTIONS":
-        return '', 200
-
-    conn = None
-    try:
-        data = request.json
-        replaced_id = data.get("replaced_beneficiary_id")
-        replacement_id = data.get("replacement_beneficiary_id")
-        reason = data.get("reason", "")
-
-        if not replaced_id or not replacement_id:
-            return jsonify({"error": "Missing beneficiary IDs"}), 400
-
-        if replaced_id == replacement_id:
-            return jsonify({"error": "A beneficiary cannot replace themselves"}), 400
-
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-
-        cur = conn.cursor()
-
-        # Start transaction
-        cur.execute("BEGIN;")
-
-        # Check both beneficiaries exist and belong to the same project
-        cur.execute("""
-            SELECT id, learner_names, learner_surname, id_number, beneficiary_status, status 
-            FROM beneficiaries 
-            WHERE id IN (%s, %s) AND project_id = %s;
-        """, (replaced_id, replacement_id, project_id))
-
-        beneficiaries = cur.fetchall()
-        if len(beneficiaries) != 2:
-            conn.rollback()
-            return jsonify({"error": "Invalid beneficiaries or project mismatch"}), 400
-
-        # Check if beneficiary is already replaced
-        cur.execute("""
-            SELECT beneficiary_status, status FROM beneficiaries WHERE id = %s;
-        """, (replaced_id,))
-        replaced_beneficiary = cur.fetchone()
-        
-        if replaced_beneficiary and replaced_beneficiary[0] == 'Replaced':
-            conn.rollback()
-            return jsonify({"error": "This beneficiary has already been replaced"}), 409
-
-        # Insert replacement record with CURRENT_DATE
-        # FIXED: Changed 'placements' to 'replacements'
-        cur.execute("""
-            INSERT INTO replacements (
-                project_id,
-                replaced_beneficiary_id,
-                replacement_beneficiary_id,
-                replacement_date,
-                reason
-            )
-            VALUES (%s, %s, %s, CURRENT_DATE, %s)
-            RETURNING id;
-        """, (project_id, replaced_id, replacement_id, reason))
-
-        replacement_record_id = cur.fetchone()[0]
-
-        # Update old beneficiary
-        cur.execute("""
-            UPDATE beneficiaries
-            SET beneficiary_status = 'Replaced', 
-                status = 'Inactive',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s;
-        """, (replaced_id,))
-
-        # Update new beneficiary
-        cur.execute("""
-            UPDATE beneficiaries
-            SET beneficiary_status = 'Replacement', 
-                status = 'Active',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s;
-        """, (replacement_id,))
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            "message": "Beneficiary replaced successfully",
-            "replacement_id": replacement_record_id
-        }), 201
-
-    except psycopg2.errors.UniqueViolation as e:
-        if conn:
-            conn.rollback()
-        return jsonify({"error": "This beneficiary has already been replaced or duplicate replacement attempted"}), 409
-    except psycopg2.Error as e:
-        if conn:
-            conn.rollback()
-        print("❌ Database error:", str(e))
-        return jsonify({"error": "Database error occurred"}), 500
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print("❌ Replacement error:", str(e))
-        import traceback
-        print(traceback.format_exc())
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
-
-
-
-
-@app.route("/api/projects/<int:project_id>/replacements", methods=["GET", "OPTIONS"])
-def get_project_replacements(project_id):
-    if request.method == "OPTIONS":
-        return '', 200
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-
-        cur = conn.cursor()
-        
-        # First, verify the project exists
-        cur.execute("SELECT id FROM projects WHERE id = %s", (project_id,))
-        project = cur.fetchone()
-        
-        if not project:
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Project not found"}), 404
-        
-        # FIXED: Changed 'placements p' to 'replacements p'
-        cur.execute("""
-            SELECT
-                p.id,
-                p.replacement_date,
-                p.reason,
-                p.created_at,
-                -- Replaced beneficiary info
-                b1.id as replaced_id,
-                b1.learner_names as replaced_first_name,
-                b1.learner_surname as replaced_last_name,
-                b1.id_number as replaced_id_number,
-                -- Replacement beneficiary info
-                b2.id as replacement_id,
-                b2.learner_names as replacement_first_name,
-                b2.learner_surname as replacement_last_name,
-                b2.id_number as replacement_id_number
-            FROM replacements p  -- FIXED: Changed 'placements' to 'replacements'
-            JOIN beneficiaries b1 ON p.replaced_beneficiary_id = b1.id
-            JOIN beneficiaries b2 ON p.replacement_beneficiary_id = b2.id
-            WHERE p.project_id = %s
-            ORDER BY p.replacement_date DESC, p.created_at DESC;
-        """, (project_id,))
-
-        rows = cur.fetchall()
-        
-        results = []
-        for row in rows:
-            results.append({
-                "id": row[0],
-                "replacement_date": row[1].strftime("%Y-%m-%d") if row[1] else None,
-                "reason": row[2],
-                "created_at": row[3].strftime("%Y-%m-%d %H:%M:%S") if row[3] else None,
-                "replaced_id": row[4],
-                "replaced_first_name": row[5],
-                "replaced_last_name": row[6],
-                "replaced_id_number": row[7],
-                "replacement_id": row[8],
-                "replacement_first_name": row[9],
-                "replacement_last_name": row[10],
-                "replacement_id_number": row[11]
-            })
-
-        cur.close()
-        return jsonify(results)
-
-    except psycopg2.Error as e:
-        print(f"❌ Database error in get_project_replacements: {str(e)}")
-        return jsonify({"error": "Database query failed", "details": str(e)}), 500
-    except Exception as e:
-        print(f"❌ Unexpected error in get_project_replacements: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
-    finally:
-        if conn:
-            conn.close()
 # ================= STATIC FILES FOR UPLOADS =================
 @app.route('/uploads/<filename>')
 def serve_uploaded_file(filename):
