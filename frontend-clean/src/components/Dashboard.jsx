@@ -26,6 +26,7 @@ import {
   Input,
   DialogContentText
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -40,12 +41,14 @@ const API_URL = `${API_BASE}/api/projects`;
 // Predefined options
 const ACCREDITORS_LIST = ["MICSETA", "QASA"]; 
 const FUNDERS_LIST = ["BankSeta", "Fasset", "Social Development", "Private Donor"]; 
-const PROJECT_TYPES = ["Training", "Learnership", "Internship", "Mentorship", "Research"]; 
+const PROJECT_TYPES = ["Training", "Learnership", "Internship", "Mentorship"]; 
 const STATUS_OPTIONS = ["Active", "Completed", "Planning", "On Hold"];
+
 const Dashboard = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -261,6 +264,14 @@ const Dashboard = () => {
     return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   };
 
+  // ADD THIS FILTER FUNCTION
+const filteredProjects = projects.filter(project => 
+  project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  project.funder?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  project.accreditor?.toLowerCase().includes(searchTerm.toLowerCase())
+);
+
   if (loading) return <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}><CircularProgress /></Box>;
 
   return (
@@ -281,113 +292,143 @@ const Dashboard = () => {
 
       {/* UPDATED: Added Analytics button to the header section */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 4, p: 3, bgcolor: 'background.paper', borderRadius: 2, boxShadow: 1 }}>
-        <Box>
-          <Typography variant="h6" sx={{ mb: 1 }}>Total Projects: {projects.length}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {projects.filter(p => p.status === 'Active').length} Active • 
-            {projects.filter(p => p.status === 'Completed').length} Completed
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 2 }}>
-          <Button 
-            variant="outlined" 
-            color="primary" 
-            startIcon={<AnalyticsIcon />}
-            onClick={handleAnalyticsClick}
-            sx={{ height: 40  }}
-          >
-            Analytics & Reports
-          </Button>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            startIcon={<AddIcon />} 
-            onClick={handleOpen}
-            sx={{ height: 40 }}
-          >
-            Add New Project
-          </Button>
-        </Box>
-      </Box>
-
+  <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
+    <Box>
+      <Typography variant="h6" sx={{ mb: 1 }}>Total Projects: {filteredProjects.length}</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {filteredProjects.filter(p => p.status === 'Active').length} Active • 
+        {filteredProjects.filter(p => p.status === 'Completed').length} Completed
+      </Typography>
+    </Box>
+    {/* ADDED: Search bar */}
+    <TextField
+      size="small"
+      placeholder="Search projects..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      sx={{ width: 300, ml: 2 }}
+      InputProps={{
+        startAdornment: (
+          <SearchIcon color="action" sx={{ mr: 1 }} />
+        ),
+      }}
+    />
+  </Box>
+  <Box sx={{ display: "flex", gap: 2 }}>
+    <Button 
+      variant="outlined" 
+      color="primary" 
+      startIcon={<AnalyticsIcon />}
+      onClick={handleAnalyticsClick}
+      sx={{ height: 40 }}
+    >
+      Analytics & Reports
+    </Button>
+    <Button 
+      variant="contained" 
+      color="primary" 
+      startIcon={<AddIcon />} 
+      onClick={handleOpen}
+      sx={{ height: 40 }}
+    >
+      Add New Project
+    </Button>
+  </Box>
+</Box>
       <Grid container spacing={3}>
-        {projects.map((p) => (
+        {filteredProjects.map((p) => (
           <Grid item xs={12} sm={6} md={4} key={p.id}>
-            <Card 
-              sx={{ 
-                cursor: "pointer", 
-                position: "relative", 
-                height: "100%",
-                transition: 'all 0.3s ease',
-                '&:hover': { 
-                  boxShadow: 6,
-                  transform: 'translateY(-4px)'
-                }
-              }}
-              onClick={() => handleProjectClick(p.id)}
-            >
-              <IconButton 
-                sx={{ 
-                  position: "absolute", 
-                  right: 8, 
-                  top: 8, 
-                  zIndex: 1,
-                  bgcolor: 'background.paper',
-                  '&:hover': {
-                    bgcolor: 'action.hover'
-                  }
-                }} 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleMenuClick(e, p);
-                }}
-              >
-                <MoreVertIcon />
-              </IconButton>
-              {p.project_image_url && (
-                <CardMedia
-                  component="img"
-                  height="140"
-                  image={p.project_image_url}
-                  alt={p.name}
-                  sx={{ objectFit: 'cover' }}
-                />
-              )}
-              <CardContent>
-                <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>{p.name}</Typography>
-                <Chip label={p.project_type} size="small" color="primary" sx={{ mb: 1 }} />
-                <Chip label={p.status} size="small" color={p.status === "Active" ? "success" : "default"} sx={{ mb: 1, ml: 1 }} />
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, height: 60, overflow: "hidden" }}>{p.description}</Typography>
+        <Card 
+  sx={{ 
+    cursor: "pointer", 
+    position: "relative", 
+    height: 250, // FIXED: Increased height to accommodate all content
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    transition: 'all 0.3s ease',
+    '&:hover': { 
+      boxShadow: 6,
+      transform: 'translateY(-4px)'
+    }
+  }}
+  onClick={() => handleProjectClick(p.id)}
+>
+  <IconButton 
+    sx={{ 
+      position: "absolute", 
+      right: 8, 
+      top: 8, 
+      zIndex: 1,
+      bgcolor: 'background.paper',
+      '&:hover': {
+        bgcolor: 'action.hover'
+      }
+    }} 
+    onClick={(e) => {
+      e.stopPropagation();
+      handleMenuClick(e, p);
+    }}
+  >
+    <MoreVertIcon />
+  </IconButton>
+  {p.project_image_url && (
+    <CardMedia
+      component="img"
+      height="140"
+      image={p.project_image_url}
+      alt={p.name}
+      sx={{ objectFit: 'cover', flexShrink: 0 }} // ADDED: flexShrink to prevent image from shrinking
+    />
+  )}
+  <CardContent sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', pb:0.5 }}>
+    <Typography variant="h6" fontWeight="bold" sx={{ mb: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {p.name}
+    </Typography>
+    <Box sx={{ mb: 1, flexShrink: 0 }}>
+      <Chip label={p.project_type} size="small" color="primary" sx={{ mr: 1 }} />
+      <Chip label={p.status} size="small" color={p.status === "Active" ? "success" : "default"} />
+    </Box>
+    <Typography variant="body2" color="text.secondary" sx={{ 
+      mb: 1, 
+      height: 40, 
+      overflow: "hidden",
+      display: '-webkit-box',
+      WebkitLineClamp: 1,
+      WebkitBoxOrient: 'vertical'
+    }}>
+      {p.description ? (p.description.length > 30 ? p.description.substring(0, 30) + "..." : p.description) : ""}
+    </Typography>
 
-                {(p.funder || p.accreditor) && (
-                  <Box sx={{ mb: 2 }}>
-                    {p.funder && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">Funder:</Typography>
-                        <Chip label={p.funder} size="small" sx={{ ml: 1 }} />
-                      </Box>
-                    )}
-                    {p.accreditor && (
-                      <Box sx={{ display: '-flex', alignItems: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">Accreditor:</Typography>
-                        <Chip label={p.accreditor} size="small" sx={{ ml: 1 }} />
-                      </Box>
-                    )}
-                  </Box>
-                )}
+    {(p.funder || p.accreditor) && (
+      <Box sx={{ mb: 2, flexShrink: 0 }}>
+        {p.funder && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Funder:</Typography>
+            <Chip label={p.funder.length > 15 ? p.funder.substring(0, 15) + "..." : p.funder} size="small" sx={{ ml: 1 }} />
+          </Box>
+        )}
+        {p.accreditor && (
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">Accreditor:</Typography>
+            <Chip label={p.accreditor.length > 15 ? p.accreditor.substring(0, 15) + "..." : p.accreditor} size="small" sx={{ ml: 1 }} />
+          </Box>
+        )}
+      </Box>
+    )}
 
-                <Divider sx={{ my: 2 }} />
+    <Divider sx={{ my: 0.5, flexShrink: 0 }} />
 
-                <Box sx={{ display: "flex", justifyContent: "space-between", flexWrap: 'wrap', gap: 1 }}>
-                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
-                    {formatDate(p.start_date)} → {formatDate(p.end_date)}
-                  </Typography>
-                  <Typography variant="body2">
-                    {p.start_date && p.end_date && calculateDuration(p.start_date, p.end_date)}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
+    <Box sx={{ display: "flex", flexWrap: 'wrap', gap: 1, mt: 0, justifyContent : "space-between" }}>
+      <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+        {formatDate(p.start_date)} → {formatDate(p.end_date)}
+      </Typography>
+      <Typography variant="body2">
+        {p.start_date && p.end_date && calculateDuration(p.start_date, p.end_date)}
+      </Typography>
+    </Box>
+  </CardContent>
+</Card>
           </Grid>
         ))}
       </Grid>
